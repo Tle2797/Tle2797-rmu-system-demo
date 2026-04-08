@@ -87,7 +87,7 @@ function getOrCreateToken(): string {
   return token;
 }
 
-function fireSurveyAlert(options: Parameters<typeof Swal.fire>[0]) {
+function fireSurveyAlert(options: Record<string, unknown>) {
   return Swal.fire({
     confirmButtonColor: "#0369a1",
     customClass: {
