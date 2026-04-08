@@ -26,10 +26,16 @@ import { execDashboardRoute } from "./routes/exec.dashboard";
 import { execCommentsRoute } from "./routes/exec.comments";
 import { dashboardReportsRoute } from "./routes/dashboard.reports";
 
+const corsOrgins = (process.env.CORS_ORIGINS || "http://localhost:3000")
+
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 export const app = new Elysia()
   .use(
     cors({
-      origin: ["http://localhost:3000"],
+      origin: corsOrgins,
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       credentials: true,
     }),
