@@ -1,0 +1,228 @@
+# การวิเคราะห์ระบบ RMU Survey
+
+ระบบประเมินความพึงพอใจการให้บริการ **มหาวิทยาลัยราชภัฏมหาสารคาม**  
+สร้างด้วย **Next.js 15 (Frontend)** + **Elysia.js/Bun (Backend)** + **PostgreSQL 17**
+
+---
+
+## 🗂 โครงสร้างระบบ (Architecture Overview)
+
+```
+rmu_survey/
+├── backend/           # Elysia.js API Server (port 3080)
+│   └── src/
+│       ├── app.ts     # Entry point + CORS + Static files
+│       ├── config/db.ts
+│       ├── utils/auth.ts, jwt.ts
+│       └── routes/    # 18 route files
+├── client/            # Next.js 15 App Router (port 3000)
+│   └── app/
+│       ├── admin/     # Admin role pages
+│       ├── dashboard/ # dept_head / staff role pages
+│       ├── exec/      # exec role pages
+│       ├── survey/    # Public survey pages
+│       └── login/
+└── rmu_survey_schema.sql
+```
+
+---
+
+## 🗄 Database Schema
+
+### Tables และ ENUMs ทั้งหมด
+
+| Table | คำอธิบาย | Fields สำคัญ |
+|---|---|---|
+| `departments` | หน่วยงาน | id, name, is_active |
+| `users` | ผู้ใช้งานระบบ | id, username, password_hash, role, department_id, title, first_name, last_name |
+| `roles` | บทบาท (lookup) | code (admin/exec/dept_head/staff), name_th |
+| `surveys` | แบบสอบถาม | id, year_be, title, is_active, starts_at, ends_at |
+| `time_slots` | ช่วงเวลาการประเมิน | id, name, start_time, end_time, max_attempts, is_active |
+| `survey_time_slots` | ตารางเชื่อม Survey ↔ TimeSlot | survey_id, slot_id |
+| `questions` | คำถาม | id, survey_id, scope (central/department), department_id, type (rating/text), text, display_order, status |
+| `respondent_tokens` | Token ผู้ตอบ (ไม่ต้อง login) | id, token, created_at, last_seen_at |
+| `responses` | การตอบแต่ละครั้ง | id, survey_id, department_id, slot_id, respondent_token_id, respondent_group, responded_date |
+| `answers` | คำตอบแต่ละข้อ | id, response_id, question_id, rating, comment |
+| `qrcodes` | QR Code | id, type (central/department), department_id, image_path, link_target |
+| `rating_bands` | เกณฑ์แปลผลคะแนน | id, min_value, max_value, label_th, sort_order |
+
+### ENUMs
+- `role_code`: admin, exec, dept_head, staff
+- `question_scope`: central, department
+- `question_type`: rating, text
+- `qrcode_type`: central, department
+- `respondent_group`: student, staff, public
+
+### ข้อมูล Seed ปัจจุบัน
+- **7 หน่วยงาน** (id 1-7)
+- **2 Surveys**: ปี 2568 (active), ปี 2569 (inactive)
+- **3 Time Slots**: ช่วงเช้า, บ่าย, ดึก
+- **7 Users**: admin, exec01, head_it, head_reg, head_gps, staff_it, staff_reg
+- **8 QR Codes**: 1 central + 7 department
+- **5 Rating Bands**: ต่ำสุด (0-1), ต่ำ (1.1-2), พอใช้ (2.1-3), ดี (3.1-4), ดีมาก (4.1-5)
+
+---
+
+## ⚙️ Backend Analysis
+
+### API Routes ทั้งหมด (18 files)
+
+| File | Prefix | Endpoints | สถานะ |
+|---|---|---|---|
+| [health.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/health.ts) | `/api` | GET /health | ✅ สมบูรณ์ |
+| [auth.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/utils/auth.ts) | `/api/auth` | POST /login, GET /me | ✅ สมบูรณ์ |
+| [departments.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/departments.ts) | `/api` | GET /departments | ✅ สมบูรณ์ |
+| [questions.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/questions.ts) | `/api` | GET /questions, GET /questions/:surveyId | ✅ สมบูรณ์ |
+| [responses.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/responses.ts) | `/api` | POST /responses | ✅ สมบูรณ์ |
+| [dashboard.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/dashboard.ts) | `/api/dashboard` | GET /department/:id/summary, /comments, /yearly | ✅ สมบูรณ์ |
+| [dashboard.questions.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/dashboard.questions.ts) | `/api/dashboard` | CRUD คำถามหน่วยงาน | ✅ สมบูรณ์ |
+| [dashboard.reports.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/dashboard.reports.ts) | `/api/dashboard` | GET /department/:id/reports | ⚠️ มี bug |
+| [admin.dashboard.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/admin.dashboard.ts) | `/api/admin/dashboard` | GET /stats | ✅ สมบูรณ์ |
+| [admin.departments.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/admin.departments.ts) | `/api/admin` | CRUD departments | ✅ สมบูรณ์ |
+| [admin.users.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/admin.users.ts) | `/api/admin` | CRUD users + PUT /profile | ✅ สมบูรณ์ |
+| [admin.qrcodes.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/admin.qrcodes.ts) | `/api/admin` | CRUD qrcodes + generate | ✅ สมบูรณ์ |
+| [admin.surveys.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/admin.surveys.ts) | `/api/admin` | CRUD surveys | ✅ สมบูรณ์ |
+| [admin.questions.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/admin.questions.ts) | `/api/admin` | CRUD central questions | ✅ สมบูรณ์ |
+| [admin.time-slots.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/admin.time-slots.ts) | `/api/admin` | CRUD time_slots | ✅ สมบูรณ์ |
+| [exec.yearly.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/exec.yearly.ts) | `/api/exec` | GET /yearly | ✅ สมบูรณ์ |
+| [exec.ranking.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/exec.ranking.ts) | `/api/exec` | GET /ranking | ✅ สมบูรณ์ |
+| [exec.reports.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/exec.reports.ts) | `/api/exec` | GET /reports | ⚠️ มี bug เล็กน้อย |
+
+### 🐛 Bugs ที่พบใน Backend
+
+#### 1. [dashboard.reports.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/dashboard.reports.ts) — SQL Column ผิด (ร้ายแรง)
+```sql
+-- ❌ ใช้ column ที่ไม่มีอยู่จริงในตาราง questions
+SELECT q.id, q.question_text, ...   -- ❌ ต้องเป็น q.text
+ORDER BY q.sort_order ASC            -- ❌ ต้องเป็น q.display_order
+```
+**ผลกระทบ**: หน้า `dashboard/reports/[departmentId]` จะ error ทุกครั้งที่โหลด
+
+#### 2. [exec.reports.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/exec.reports.ts) — filterByTimeSlot ใช้ column ผิด
+```sql
+-- ❌ r.time_slot_id ไม่มีใน table responses
+WHERE r.time_slot_id = $1
+-- ✅ ควรใช้ r.slot_id
+```
+**ผลกระทบ**: การ filter ตาม TimeSlot ใน exec/reports จะไม่ทำงาน
+
+---
+
+## 🖥 Frontend Analysis
+
+### Client Pages ทั้งหมด (24 หน้า)
+
+#### 🔐 Auth
+| หน้า | Route | API | สถานะ |
+|---|---|---|---|
+| Login | `/login` | POST /api/auth/login | ✅ สมบูรณ์ |
+| Root redirect | `/` | GET /api/auth/me | ✅ สมบูรณ์ |
+
+#### 👑 Admin Role (`/admin/...`)
+| หน้า | Route | API | สถานะ |
+|---|---|---|---|
+| Dashboard | `/admin/dashboard` | GET /api/admin/dashboard/stats | ✅ สมบูรณ์ |
+| Departments | `/admin/departments` | CRUD /api/admin/departments | ✅ สมบูรณ์ |
+| Users | `/admin/users` | CRUD /api/admin/users | ✅ สมบูรณ์ |
+| QR Codes | `/admin/qrcodes` | CRUD /api/admin/qrcodes | ✅ สมบูรณ์ |
+| Surveys | `/admin/surveys` | CRUD /api/admin/surveys | ✅ สมบูรณ์ |
+| Questions | `/admin/questions` | CRUD /api/admin/questions | ✅ สมบูรณ์ |
+| Time Slots | `/admin/time-slots` | CRUD /api/admin/time-slots | ✅ สมบูรณ์ |
+| Profile | `/admin/profile` | PUT /api/admin/profile | ✅ สมบูรณ์ |
+
+#### 📊 Dashboard Role - dept_head/staff (`/dashboard/...`)
+| หน้า | Route | API | สถานะ |
+|---|---|---|---|
+| Home redirect | `/dashboard/department/[id]` | GET /api/dashboard/department/:id/summary | ✅ สมบูรณ์ |
+| QR Code | `/dashboard/qrcode/[id]` | GET /api/admin/qrcodes | ✅ สมบูรณ์ |
+| คำถาม | `/dashboard/questions/[id]` | CRUD /api/dashboard/questions | ✅ สมบูรณ์ |
+| รายงาน | `/dashboard/reports/[id]` | GET /api/dashboard/department/:id/reports | ⚠️ ติด bug backend |
+| รายปี | `/dashboard/yearly/[id]` | GET /api/dashboard/department/:id/yearly | ✅ สมบูรณ์ |
+| โปรไฟล์ | `/dashboard/profile` | PUT /api/admin/profile | ✅ สมบูรณ์ |
+
+#### 🏛 Exec Role (`/exec/...`)
+| หน้า | Route | API | สถานะ |
+|---|---|---|---|
+| Dashboard | `/exec/dashboard` | GET /api/admin/dashboard/stats | ✅ สมบูรณ์ |
+| Yearly | `/exec/yearly` | GET /api/exec/yearly | ✅ สมบูรณ์ |
+| Ranking | `/exec/ranking` | GET /api/exec/ranking | ✅ สมบูรณ์ |
+| Reports | `/exec/reports` | GET /api/exec/reports | ⚠️ filter slot_id ไม่ work |
+| โปรไฟล์ | `/exec/profile` | PUT /api/admin/profile | ✅ สมบูรณ์ |
+
+#### 📝 Survey (Public)
+| หน้า | Route | API | สถานะ |
+|---|---|---|---|
+| เลือกหน่วยงาน | `/survey` | GET /api/departments | ✅ สมบูรณ์ |
+| ทำแบบสอบถาม | `/survey/[departmentId]` | GET /api/questions, POST /api/responses | ✅ สมบูรณ์ |
+| สำเร็จ | `/survey/success` | — | ✅ สมบูรณ์ |
+
+---
+
+## 🔍 ส่วนที่ยังไม่สมบูรณ์ / ต้องแก้ไข
+
+### 🐛 Bugs ต้องแก้ด่วน
+
+| # | ปัญหา | ไฟล์ | ความร้ายแรง |
+|---|---|---|---|
+| 1 | SQL ใช้ `q.question_text` และ `q.sort_order` ผิด schema | [backend/src/routes/dashboard.reports.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/dashboard.reports.ts) | 🔴 ร้ายแรง |
+| 2 | Filter TimeSlot ใช้ `r.time_slot_id` ผิด (ต้องเป็น `r.slot_id`) | [backend/src/routes/exec.reports.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/exec.reports.ts) | 🟡 ปานกลาง |
+
+### 📝 ส่วนที่อาจต้องเพิ่ม/ปรับปรุง
+
+| # | Feature | คำอธิบาย | Priority |
+|---|---|---|---|
+| 1 | **Middleware Auth Guard** | ทุก route ที่ต้องการ auth ยังไม่มีการเช็ค token ฝั่ง backend (เช็คแค่จาก frontend) | 🔴 สำคัญ |
+| 2 | **exec dashboard** | ใช้ `GET /api/admin/dashboard/stats` ร่วมกับ admin (อาจต้องแยก endpoint ถ้าอยากจำกัดข้อมูล) | 🟡 ปานกลาง |
+| 3 | **Profile page admin endpoint** | `/exec/profile` และ `/dashboard/profile` เรียก `PUT /api/admin/profile` ซึ่ง prefix เป็น `/api/admin` แต่ไม่ใช่ admin | 🟡 ปานกลาง |
+| 4 | **survey_time_slots ใน responses** | ข้อมูล slot_id ใน responses ไม่ได้ validate ว่า survey รองรับ slot นั้น | 🟢 เล็กน้อย |
+| 5 | **Export รายงานรายปี** | หน้า exec/yearly และ dashboard/yearly ยังไม่มีปุ่ม Export PDF/Excel | 🟢 เล็กน้อย |
+
+---
+
+## 📐 Flow การทำงานหลัก
+
+```
+ผู้ตอบ (Public)
+  └─ scan QR ──► /survey?dept=X
+                 ├─ GET /api/departments
+                 ├─ GET /api/questions (survey ที่ active)
+                 └─ POST /api/responses (รวม answers)
+
+ผู้ดูแล (dept_head/staff)
+  └─ login ──► /dashboard/department/[id]
+               ├─ summary: คะแนน + KPI
+               ├─ comments: ความคิดเห็น
+               ├─ yearly: รายปี
+               ├─ reports: export PDF/Excel [⚠️ bug]
+               └─ questions: จัดการคำถามหน่วยงาน
+
+ผู้บริหาร (exec)
+  └─ login ──► /exec/dashboard (ภาพรวมทั้งมหาวิทยาลัย)
+               ├─ yearly: เปรียบเทียบ 5 ปี
+               ├─ ranking: จัดอันดับหน่วยงาน
+               └─ reports: รายงาน + export [⚠️ filter slot ไม่ work]
+
+แอดมิน (admin)
+  └─ login ──► /admin/dashboard
+               ├─ departments: จัดการหน่วยงาน
+               ├─ users: จัดการผู้ใช้
+               ├─ surveys: จัดการแบบสอบถาม
+               ├─ questions: คำถามกลาง
+               ├─ qrcodes: จัดการ QR Code
+               └─ time-slots: ช่วงเวลา
+```
+
+---
+
+## 🎯 สรุปสิ่งที่ต้องทำ (TODO)
+
+### ด่วนที่สุด (แก้ Bug)
+- [ ] แก้ [dashboard.reports.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/dashboard.reports.ts) — เปลี่ยน `q.question_text` → `q.text`, `q.sort_order` → `q.display_order`
+- [ ] แก้ [exec.reports.ts](file:///c:/Users/Asus/Documents/Code/project/rmu_survey/backend/src/routes/exec.reports.ts) — เปลี่ยน `r.time_slot_id` → `r.slot_id`
+
+### สำคัญ (Security)
+- [ ] เพิ่ม JWT middleware ใน Backend routes ที่ต้องการ authentication
+
+### เพิ่มเติม (Nice to have)
+- [ ] Export PDF/Excel ในหน้า exec/yearly และ dashboard/yearly
+- [ ] แยก exec dashboard endpoint ออกจาก admin ถ้าต้องการจำกัดข้อมูล
