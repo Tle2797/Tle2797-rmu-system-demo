@@ -1,14 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  AlertCircle,
-  Building2,
-  ClipboardList,
-  Loader2,
-  SendHorizontal,
-  Star,
-} from "lucide-react";
+import { AlertCircle, Building2, ClipboardList, Loader2, Star } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Swal from "sweetalert2";
@@ -181,8 +174,10 @@ export default function SurveyDepartmentPage({
     };
   }, [deptId, reloadKey]);
 
+  const hasQuestions = questions.length > 0;
+
   const canSubmit = useMemo(() => {
-    if (!token || !department || !group) return false;
+    if (!token || !department || !group || !hasQuestions) return false;
 
     return questions.every((question) => {
       const answer = answers[question.id];
@@ -194,7 +189,7 @@ export default function SurveyDepartmentPage({
 
       return true;
     });
-  }, [answers, department, group, questions, token]);
+  }, [answers, department, group, hasQuestions, questions, token]);
 
   const surveyYearLabel =
     survey?.year_be && Number.isFinite(survey.year_be)
@@ -202,6 +197,8 @@ export default function SurveyDepartmentPage({
       : "แบบประเมินที่เปิดใช้งาน";
 
   const handleSubmit = async () => {
+    if (!hasQuestions) return;
+
     if (!group) {
       await fireSurveyAlert({
         icon: "warning",
@@ -341,128 +338,134 @@ export default function SurveyDepartmentPage({
           </div>
         </section>
 
-        <section className="rounded-[28px] border border-sky-100/80 bg-white/90 p-6 shadow-[0_16px_40px_rgba(37,99,235,0.08)] backdrop-blur-sm sm:p-7">
-          <div className="max-w-xl">
-            <h2 className="mt-2 text-xl font-semibold text-slate-900">เลือกกลุ่มผู้ประเมิน</h2>
-            <select
-              className={`mt-4 w-full rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3 text-sm shadow-sm outline-none transition hover:border-sky-200 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100 ${
-                group ? "text-slate-800" : "text-slate-500"
-              }`}
-              value={group}
-              onChange={(event) => setGroup(event.target.value as GroupValue)}
-            >
-              <option value="">เลือกกลุ่มผู้ทำแบบประเมิน</option>
-              <option value="student">นักศึกษา</option>
-              <option value="staff">บุคลากร</option>
-              <option value="public">บุคคลทั่วไป</option>
-            </select>
-          </div>
-        </section>
+        {hasQuestions ? (
+          <section className="rounded-[28px] border border-sky-100/80 bg-white/90 p-6 shadow-[0_16px_40px_rgba(37,99,235,0.08)] backdrop-blur-sm sm:p-7">
+            <div className="max-w-xl">
+              <h2 className="mt-2 text-xl font-semibold text-slate-900">เลือกกลุ่มผู้ประเมิน</h2>
+              <select
+                className={`mt-4 w-full rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3 text-sm shadow-sm outline-none transition hover:border-sky-200 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100 ${
+                  group ? "text-slate-800" : "text-slate-500"
+                }`}
+                value={group}
+                onChange={(event) => setGroup(event.target.value as GroupValue)}
+              >
+                <option value="">เลือกกลุ่มผู้ทำแบบประเมิน</option>
+                <option value="student">นักศึกษา</option>
+                <option value="staff">บุคลากร</option>
+                <option value="public">บุคคลทั่วไป</option>
+              </select>
+            </div>
+          </section>
+        ) : null}
 
         <section className="space-y-4">
-          {questions.map((question, index) => (
-            <article
-              key={question.id}
-              className="rounded-[28px] border border-sky-100/80 bg-white/95 p-5 shadow-[0_16px_36px_rgba(37,99,235,0.07)] backdrop-blur-sm"
-            >
-              <div className="flex items-start gap-4">
-                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(37,99,235,0.22)] ring-1 ring-sky-200/60">
-                  {index + 1}
-                </div>
+          {hasQuestions ? (
+            questions.map((question, index) => (
+              <article
+                key={question.id}
+                className="rounded-[28px] border border-sky-100/80 bg-white/95 p-5 shadow-[0_16px_36px_rgba(37,99,235,0.07)] backdrop-blur-sm"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(37,99,235,0.22)] ring-1 ring-sky-200/60">
+                    {index + 1}
+                  </div>
 
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-lg font-semibold leading-7 text-slate-900">{question.text}</h3>
-                </div>
-              </div>
-
-              {question.type === "rating" ? (
-                <div className="mt-5">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                    {RATING_OPTIONS.map(({ score, label }) => (
-                      <button
-                        key={score}
-                        type="button"
-                        className={`rounded-[22px] border px-4 py-4 text-left transition ${
-                          answers[question.id]?.rating === score
-                            ? "border-sky-400 bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 text-white shadow-[0_16px_32px_rgba(37,99,235,0.22)]"
-                            : "border-sky-100 bg-white text-slate-700 shadow-sm hover:border-sky-300 hover:bg-sky-50/80 hover:shadow-[0_12px_28px_rgba(56,189,248,0.10)]"
-                        }`}
-                        onClick={() =>
-                          setAnswers((previous) => ({
-                            ...previous,
-                            [question.id]: {
-                              ...previous[question.id],
-                              rating: score,
-                            },
-                          }))
-                        }
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-1">
-                            {Array.from({ length: score }).map((_, index) => (
-                              <Star
-                                key={index}
-                                className={`h-4 w-4 ${
-                                  answers[question.id]?.rating === score
-                                    ? "fill-amber-300 text-amber-300"
-                                    : "fill-amber-400 text-amber-400"
-                                }`}
-                                aria-hidden="true"
-                              />
-                            ))}
-                          </div>
-                          <span className="text-base font-semibold">{score}</span>
-                        </div>
-                        <div className="mt-3 text-sm font-medium">{label}</div>
-                      </button>
-                    ))}
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-lg font-semibold leading-7 text-slate-900">{question.text}</h3>
                   </div>
                 </div>
-              ) : (
-                <textarea
-                  className="mt-5 min-h-32 w-full rounded-[22px] border border-sky-100 bg-sky-50/70 px-4 py-3 text-sm leading-6 text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
-                  rows={3}
-                  placeholder="กรุณาแสดงความคิดเห็นเพิ่มเติม"
-                  value={answers[question.id]?.comment ?? ""}
-                  onChange={(event) =>
-                    setAnswers((previous) => ({
-                      ...previous,
-                      [question.id]: {
-                        ...previous[question.id],
-                        comment: event.target.value,
-                      },
-                    }))
-                  }
-                />
-              )}
+
+                {question.type === "rating" ? (
+                  <div className="mt-5">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                      {RATING_OPTIONS.map(({ score, label }) => (
+                        <button
+                          key={score}
+                          type="button"
+                          className={`rounded-[22px] border px-4 py-4 text-left transition ${
+                            answers[question.id]?.rating === score
+                              ? "border-sky-400 bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 text-white shadow-[0_16px_32px_rgba(37,99,235,0.22)]"
+                              : "border-sky-100 bg-white text-slate-700 shadow-sm hover:border-sky-300 hover:bg-sky-50/80 hover:shadow-[0_12px_28px_rgba(56,189,248,0.10)]"
+                          }`}
+                          onClick={() =>
+                            setAnswers((previous) => ({
+                              ...previous,
+                              [question.id]: {
+                                ...previous[question.id],
+                                rating: score,
+                              },
+                            }))
+                          }
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: score }).map((_, starIndex) => (
+                                <Star
+                                  key={starIndex}
+                                  className={`h-4 w-4 ${
+                                    answers[question.id]?.rating === score
+                                      ? "fill-amber-300 text-amber-300"
+                                      : "fill-amber-400 text-amber-400"
+                                  }`}
+                                  aria-hidden="true"
+                                />
+                              ))}
+                            </div>
+                            <span className="text-base font-semibold">{score}</span>
+                          </div>
+                          <div className="mt-3 text-sm font-medium">{label}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <textarea
+                    className="mt-5 min-h-32 w-full rounded-[22px] border border-sky-100 bg-sky-50/70 px-4 py-3 text-sm leading-6 text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100"
+                    rows={3}
+                    placeholder="กรุณาแสดงความคิดเห็นเพิ่มเติม"
+                    value={answers[question.id]?.comment ?? ""}
+                    onChange={(event) =>
+                      setAnswers((previous) => ({
+                        ...previous,
+                        [question.id]: {
+                          ...previous[question.id],
+                          comment: event.target.value,
+                        },
+                      }))
+                    }
+                  />
+                )}
+              </article>
+            ))
+          ) : (
+            <article className="rounded-[28px] border border-dashed border-sky-200 bg-sky-50/50 p-8 text-center shadow-[0_16px_36px_rgba(37,99,235,0.05)] backdrop-blur-sm">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+                <AlertCircle className="h-7 w-7" aria-hidden="true" />
+              </div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">หน่วยงานนี้ยังไม่มีคำถาม</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                ตอนนี้ยังไม่มีคำถามสำหรับหน่วยงานนี้ในแบบประเมิน กรุณาติดต่อผู้ดูแลระบบหรือกลับมาใหม่ภายหลัง
+              </p>
             </article>
-          ))}
+          )}
         </section>
 
-        <section className="rounded-[28px] border border-sky-100/80 bg-white/90 p-6 shadow-[0_16px_40px_rgba(37,99,235,0.08)] backdrop-blur-sm sm:p-7">
-          <button
-            type="button"
-            disabled={!canSubmit || submitting}
-            onClick={handleSubmit}
-            className={`inline-flex w-full items-center justify-center gap-2 rounded-[22px] py-3.5 text-base font-semibold transition ${
-              canSubmit && !submitting
-                ? "bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 text-white shadow-[0_16px_34px_rgba(37,99,235,0.20)] hover:brightness-105"
-                : "cursor-not-allowed bg-slate-200 text-slate-500"
-            }`}
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-                <span>กำลังส่งแบบประเมิน...</span>
-              </>
-            ) : (
-              <>
-                <SendHorizontal className="h-5 w-5" aria-hidden="true" />
-                <span>ส่งแบบประเมิน</span>
-              </>
-            )}
-          </button>
-        </section>
+        {hasQuestions ? (
+          <section className="rounded-[28px] border border-sky-100/80 bg-white/90 p-6 shadow-[0_16px_40px_rgba(37,99,235,0.08)] backdrop-blur-sm sm:p-7">
+            <button
+              type="button"
+              disabled={!canSubmit || submitting}
+              onClick={handleSubmit}
+              className={`inline-flex w-full items-center justify-center rounded-[22px] py-3.5 text-base font-semibold transition ${
+                canSubmit && !submitting
+                  ? "bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 text-white shadow-[0_16px_34px_rgba(37,99,235,0.20)] hover:brightness-105"
+                  : "cursor-not-allowed bg-slate-200 text-slate-500"
+              }`}
+            >
+              {submitting ? "กำลังส่งแบบประเมิน..." : "ส่งแบบประเมิน"}
+            </button>
+          </section>
+        ) : null}
       </div>
     </main>
   );
