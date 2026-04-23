@@ -262,7 +262,7 @@ export default function ExecDashboardPage() {
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-center"><div className="text-3xl font-bold">{responses.today.toLocaleString("th-TH")}</div><div className="mt-0.5 text-xs text-sky-100/80">ผู้ตอบวันนี้</div></div>
             <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-center"><div className="text-3xl font-bold">{responses.total.toLocaleString("th-TH")}</div><div className="mt-0.5 text-xs text-sky-100/80">ผู้ตอบสะสม</div></div>
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-center"><div className="text-3xl font-bold">{avgRating ? avgRating.toFixed(2) : "-"}</div><div className="mt-0.5 text-xs text-sky-100/80">{avgRating ? `ผลการประเมิน ${overallLabel}` : "ยังไม่มีคะแนนเฉลี่ย"}</div></div>
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-center"><div className="text-3xl font-bold">{avgRating ? avgRating.toFixed(2) : "-"}</div><div className="mt-0.5 text-xs text-sky-100/80">{avgRating ? `ผลการประเมิน: ${overallLabel}` : "ยังไม่มีคะแนนเฉลี่ย"}</div></div>
             <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-center"><div className="text-3xl font-bold">{coverage.departments_with_responses}</div><div className="mt-0.5 text-xs text-sky-100/80">หน่วยงานที่มีข้อมูล</div></div>
           </div>
         </div>
