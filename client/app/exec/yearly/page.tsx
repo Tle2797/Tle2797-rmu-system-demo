@@ -19,15 +19,21 @@ import {
 } from "recharts";
 import {
   BarChart3,
-  Building2,
   CalendarDays,
   CircleAlert,
+  BadgeCheck,
   LineChart,
-  Minus,
   RefreshCw,
-  TrendingDown,
   TrendingUp,
 } from "lucide-react";
+
+type RatingBand = {
+  id: number;
+  min_value: number;
+  max_value: number;
+  label_th: string;
+  sort_order: number;
+};
 
 type YearlyOverview = {
   year: number;
@@ -35,38 +41,27 @@ type YearlyOverview = {
   avg_rating: number;
 };
 
-type DepartmentDetail = {
-  department_id: number;
-  department_name: string;
-  scores: Record<string, number>;
-  latest_diff: number;
-};
-
 type YearlyStats = {
   years_list: number[];
   yearly_overview: YearlyOverview[];
-  departments_detail: DepartmentDetail[];
+  rating_bands: RatingBand[];
 };
 
 type ChartRow = {
-  year: number;
   year_be: number;
   label: string;
   avg_rating: number | null;
-  departments_with_data: number;
   has_data: boolean;
+  evaluation_label: string;
+  evaluation_bg_class: string;
 };
 
 type IconType = ComponentType<{ className?: string }>;
 
-const PAGE_SIZE = 10;
-
 const YEARLY_THEME = {
   primary: "from-sky-500 to-cyan-500",
   success: "from-emerald-500 to-teal-500",
-  neutral: "from-slate-500 to-slate-600",
   accent: "from-blue-600 to-indigo-600",
-  danger: "from-rose-500 to-red-500",
 } as const;
 
 function getCurrentBEYear() {
@@ -111,9 +106,60 @@ function calculateAverage(values: Array<number | null>) {
   return Number(average.toFixed(2));
 }
 
-function getYearDelta(current: number | null, previous: number | null) {
-  if (current === null || previous === null) return null;
-  return Number((current - previous).toFixed(2));
+function resolveBandMeta(avg: number | null, bands: RatingBand[]) {
+  if (!avg || !Number.isFinite(avg) || bands.length === 0) {
+    return {
+      label: "ยังไม่มีข้อมูล",
+      bgClass: "bg-slate-100 text-slate-500 border-slate-200",
+      textClass: "text-slate-500",
+    };
+  }
+
+  const value = Number(Math.max(0, Math.min(5, avg)).toFixed(1));
+  const ordered = [...bands].sort((left, right) => left.sort_order - right.sort_order);
+  const found = ordered.find((band) => value >= band.min_value && value <= band.max_value);
+
+  if (!found) {
+    return {
+      label: "ยังไม่มีข้อมูล",
+      bgClass: "bg-slate-100 text-slate-500 border-slate-200",
+      textClass: "text-slate-500",
+    };
+  }
+
+  const maxOrder = Math.max(...ordered.map((band) => band.sort_order));
+  const minOrder = Math.min(...ordered.map((band) => band.sort_order));
+  const pct = (found.sort_order - minOrder) / (maxOrder - minOrder || 1);
+
+  if (pct >= 0.75) {
+    return {
+      label: found.label_th,
+      bgClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      textClass: "text-emerald-600",
+    };
+  }
+
+  if (pct >= 0.5) {
+    return {
+      label: found.label_th,
+      bgClass: "bg-blue-50 text-blue-700 border-blue-200",
+      textClass: "text-blue-600",
+    };
+  }
+
+  if (pct >= 0.25) {
+    return {
+      label: found.label_th,
+      bgClass: "bg-yellow-50 text-yellow-700 border-yellow-200",
+      textClass: "text-yellow-600",
+    };
+  }
+
+  return {
+    label: found.label_th,
+    bgClass: "bg-rose-50 text-rose-700 border-rose-200",
+    textClass: "text-rose-600",
+  };
 }
 
 function StatCard({
@@ -272,9 +318,11 @@ function YearlyChartTooltip({
             <span className="font-bold text-slate-900">{formatScore(row.avg_rating)}</span>
           </div>
           <div className="flex items-center justify-between gap-4">
-            <span>หน่วยงานที่มีข้อมูล</span>
-            <span className="font-bold text-slate-900">
-              {formatCount(row.departments_with_data)} หน่วยงาน
+            <span>ผลการประเมิน</span>
+            <span
+              className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${row.evaluation_bg_class}`}
+            >
+              {row.evaluation_label}
             </span>
           </div>
         </div>
@@ -293,7 +341,6 @@ export default function ExecYearlyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     let alive = true;
@@ -307,7 +354,6 @@ export default function ExecYearlyPage() {
         if (!alive) return;
 
         setData(res);
-        setCurrentPage(1);
       } catch (error) {
         if (!alive) return;
         setError(getErrorMessage(error, "โหลดข้อมูลรายปีไม่สำเร็จ"));
@@ -336,60 +382,34 @@ export default function ExecYearlyPage() {
     return map;
   }, [data?.yearly_overview]);
 
+  const ratingBands = useMemo(() => data?.rating_bands ?? [], [data?.rating_bands]);
+
   const chartData = useMemo<ChartRow[]>(() => {
     return yearLabels.map((yearBE) => {
       const overview = yearlyOverviewMap.get(yearBE);
-      const yearCE = overview?.year ?? yearBE - 543;
       const average = parseScore(overview?.avg_rating);
-      const departmentsWithData = (data?.departments_detail ?? []).filter(
-        (department) => parseScore(department.scores[String(yearBE)]) !== null,
-      ).length;
+      const evaluation = resolveBandMeta(average, ratingBands);
 
       return {
-        year: yearCE,
         year_be: yearBE,
         label: `${yearBE}`,
         avg_rating: average,
-        departments_with_data: departmentsWithData,
         has_data: average !== null,
+        evaluation_label: evaluation.label,
+        evaluation_bg_class: evaluation.bgClass,
       };
     });
-  }, [data?.departments_detail, yearLabels, yearlyOverviewMap]);
-
-  const comparisonRows = useMemo(() => {
-    const latestBE = yearLabels[yearLabels.length - 1];
-
-    return [...(data?.departments_detail ?? [])].sort((left, right) => {
-      const leftScore = latestBE ? parseScore(left.scores[String(latestBE)]) ?? -1 : -1;
-      const rightScore = latestBE ? parseScore(right.scores[String(latestBE)]) ?? -1 : -1;
-
-      if (leftScore !== rightScore) {
-        return rightScore - leftScore;
-      }
-
-      return left.department_name.localeCompare(right.department_name, "th");
-    });
-  }, [data?.departments_detail, yearLabels]);
-
-  const totalPages = Math.max(1, Math.ceil(comparisonRows.length / PAGE_SIZE));
-
-  const paginatedComparisonRows = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return comparisonRows.slice(start, start + PAGE_SIZE);
-  }, [comparisonRows, currentPage]);
+  }, [ratingBands, yearLabels, yearlyOverviewMap]);
 
   const overallAverage = useMemo(
     () => calculateAverage(chartData.map((item) => item.avg_rating)),
     [chartData],
   );
+  const overallEvaluation = resolveBandMeta(overallAverage, ratingBands);
 
   const hasChartData = chartData.some((item) => item.avg_rating !== null);
-  const totalDepartments = data?.departments_detail.length ?? 0;
   const yearsWithData = chartData.filter((item) => item.has_data).length;
   const latestYear = chartData[chartData.length - 1] ?? null;
-  const improvedCount = (data?.departments_detail ?? []).filter((item) => item.latest_diff > 0).length;
-  const declinedCount = (data?.departments_detail ?? []).filter((item) => item.latest_diff < 0).length;
-  const steadyCount = Math.max(totalDepartments - improvedCount - declinedCount, 0);
   const rangeStart = yearLabels[0] ?? fallbackYears[0];
   const rangeEnd = yearLabels[yearLabels.length - 1] ?? fallbackYears[fallbackYears.length - 1];
 
@@ -437,9 +457,6 @@ export default function ExecYearlyPage() {
                 <span className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-sky-100 backdrop-blur-md sm:text-sm">
                   พ.ศ. {rangeStart} - {rangeEnd}
                 </span>
-                <span className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-sky-100 backdrop-blur-md sm:text-sm">
-                  {formatCount(totalDepartments)} หน่วยงาน
-                </span>
               </div>
             </div>
           </div>
@@ -460,6 +477,14 @@ export default function ExecYearlyPage() {
             iconClass={YEARLY_THEME.primary}
           />
           <StatCard
+            icon={BadgeCheck}
+            label="ผลการประเมิน"
+            value={overallEvaluation.label}
+            cardClass={`border-slate-200/80 bg-white/95 shadow-[0_16px_40px_rgba(37,99,235,0.08)] ${overallEvaluation.bgClass}`}
+            iconClass={YEARLY_THEME.success}
+            valueClass="text-xl"
+          />
+          <StatCard
             icon={CalendarDays}
             label="จำนวนปีที่มีข้อมูล"
             value={`${formatCount(yearsWithData)} ปี`}
@@ -468,46 +493,12 @@ export default function ExecYearlyPage() {
             valueClass="text-2xl"
           />
           <StatCard
-            icon={Building2}
-            label="จำนวนหน่วยงาน"
-            value={`${formatCount(totalDepartments)} หน่วยงาน`}
-            cardClass="border-slate-200/80 bg-white/95"
-            iconClass={YEARLY_THEME.success}
-            valueClass="text-2xl"
-          />
-          <StatCard
             icon={LineChart}
             label="คะแนนเฉลี่ยปีล่าสุด"
             value={formatScore(latestYear?.avg_rating)}
+            sub={latestYear ? `ผลการประเมิน ${latestYear.evaluation_label}` : undefined}
             cardClass="border-slate-200/80 bg-white/95"
             iconClass={YEARLY_THEME.primary}
-            valueClass="text-2xl"
-          />
-        </section>
-
-        <section className="grid gap-3 sm:grid-cols-3">
-          <StatCard
-            icon={TrendingUp}
-            label="คะแนนเพิ่มขึ้น"
-            value={`${formatCount(improvedCount)} หน่วยงาน`}
-            cardClass="border-slate-200/80 bg-white/95"
-            iconClass={YEARLY_THEME.success}
-            valueClass="text-2xl"
-          />
-          <StatCard
-            icon={TrendingDown}
-            label="คะแนนลดลง"
-            value={`${formatCount(declinedCount)} หน่วยงาน`}
-            cardClass="border-slate-200/80 bg-white/95"
-            iconClass={YEARLY_THEME.danger}
-            valueClass="text-2xl"
-          />
-          <StatCard
-            icon={Minus}
-            label="คะแนนคงที่"
-            value={`${formatCount(steadyCount)} หน่วยงาน`}
-            cardClass="border-slate-200/80 bg-white/95"
-            iconClass={YEARLY_THEME.neutral}
             valueClass="text-2xl"
           />
         </section>
@@ -581,9 +572,7 @@ export default function ExecYearlyPage() {
           icon={BarChart3}
         >
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            {chartData.map((item, index) => {
-              const previous = index > 0 ? chartData[index - 1] : null;
-              const delta = getYearDelta(item.avg_rating, previous?.avg_rating ?? null);
+            {chartData.map((item) => {
               const cardTone = item.has_data
                 ? "border-sky-100/80 bg-gradient-to-b from-white to-sky-50/60"
                 : "border-slate-200/80 bg-white/90";
@@ -616,134 +605,21 @@ export default function ExecYearlyPage() {
 
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <span
-                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
                         item.has_data
-                          ? "bg-sky-100 text-sky-700"
-                          : "bg-slate-100 text-slate-500"
+                          ? item.evaluation_bg_class
+                          : "bg-slate-100 text-slate-500 border-slate-200"
                       }`}
                     >
                       {item.has_data
-                        ? `มีข้อมูล ${formatCount(item.departments_with_data)} หน่วยงาน`
+                        ? `ผลการประเมิน ${item.evaluation_label}`
                         : "ไม่มีข้อมูล"}
-                    </span>
-                    <span
-                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                        delta === null
-                          ? "bg-white text-slate-500 ring-1 ring-slate-200/80"
-                          : delta > 0
-                            ? "bg-emerald-100 text-emerald-700"
-                            : delta < 0
-                              ? "bg-rose-100 text-rose-700"
-                              : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {delta === null ? "ไม่มีข้อมูลเปรียบเทียบ" : `เทียบปีก่อน ${delta > 0 ? "+" : ""}${delta.toFixed(2)}`}
                     </span>
                   </div>
                 </article>
               );
             })}
           </div>
-        </SectionCard>
-
-        <SectionCard
-          title="เปรียบเทียบหน่วยงานรายปี"
-          icon={Building2}
-          right={`ทั้งหมด ${formatCount(totalDepartments)} หน่วยงาน`}
-        >
-          <div className="overflow-x-auto">
-            <table className="min-w-full whitespace-nowrap text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-600">
-                  <th className="px-4 py-3 text-center font-semibold">ลำดับ</th>
-                  <th className="px-4 py-3 text-left font-semibold">หน่วยงาน</th>
-                  {yearLabels.map((yearBE) => (
-                    <th key={yearBE} className="px-4 py-3 text-center font-semibold">
-                      พ.ศ. {yearBE}
-                    </th>
-                  ))}
-                  <th className="px-4 py-3 text-center font-semibold">ผลต่างล่าสุด</th>
-                </tr>
-              </thead>
-              <tbody>
-                {comparisonRows.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={yearLabels.length + 3}
-                      className="px-4 py-10 text-center text-slate-400"
-                    >
-                      ยังไม่มีข้อมูลรายปีของหน่วยงาน
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedComparisonRows.map((department, index) => (
-                    <tr
-                      key={department.department_id}
-                      className="border-b border-slate-100 transition last:border-b-0 hover:bg-sky-50/40"
-                    >
-                      <td className="px-4 py-3 text-center text-slate-500">
-                        {(currentPage - 1) * PAGE_SIZE + index + 1}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-900">
-                        {department.department_name}
-                      </td>
-                      {yearLabels.map((yearBE) => {
-                        const score = parseScore(department.scores[String(yearBE)]);
-
-                        return (
-                          <td
-                            key={`${department.department_id}-${yearBE}`}
-                            className="px-4 py-3 text-center text-slate-600"
-                          >
-                            {score === null ? "-" : score.toFixed(2)}
-                          </td>
-                        );
-                      })}
-                      <td className="px-4 py-3 text-center font-semibold">
-                        {department.latest_diff > 0 ? (
-                          <span className="text-emerald-600">
-                            +{department.latest_diff.toFixed(2)}
-                          </span>
-                        ) : department.latest_diff < 0 ? (
-                          <span className="text-rose-600">
-                            {department.latest_diff.toFixed(2)}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">0.00</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-          {comparisonRows.length > 0 ? (
-            <div className="flex flex-col gap-3 border-t border-slate-200/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div />
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                  disabled={currentPage === 1}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  ย้อนกลับ
-                </button>
-                <div className="rounded-xl bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700">
-                  หน้า {currentPage} / {totalPages}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                  disabled={currentPage === totalPages}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  ถัดไป
-                </button>
-              </div>
-            </div>
-          ) : null}
         </SectionCard>
       </div>
     </main>
