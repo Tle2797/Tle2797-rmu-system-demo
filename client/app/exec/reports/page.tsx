@@ -10,6 +10,7 @@ import {
   Download,
   FileSpreadsheet,
   Gauge,
+  MessageSquareText,
   PieChart,
   Printer,
   Trophy,
@@ -208,8 +209,8 @@ export default function ExecReportsPage() {
     ];
   }, [data]);
 
-  const topDepartment = data?.departments[0] ?? null;
   const activeDepartments = (data?.departments ?? []).filter((item) => item.avg_rating > 0).length;
+  const overallBand = getBand(data?.summary.avg_rating ?? 0, data?.rating_bands ?? []);
 
   if (loading && !data) {
     return (
@@ -270,10 +271,10 @@ export default function ExecReportsPage() {
         ) : null}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Kpi icon={Users} title="ผู้ตอบแบบประเมินรวม" value={formatCount(data?.summary.total_responses)} sub="จำนวนข้อมูลที่เข้าสู่รายงาน" tone="from-sky-500 to-cyan-500" />
-          <Kpi icon={Gauge} title="คะแนนเฉลี่ยภาพรวม" value={formatScore(data?.summary.avg_rating)} sub={getBand(data?.summary.avg_rating ?? 0, data?.rating_bands ?? []).label} tone="from-blue-500 to-indigo-500" />
-          <Kpi icon={Building2} title="หน่วยงานที่มีข้อมูล" value={formatCount(activeDepartments)} sub={`จากทั้งหมด ${formatCount(data?.departments.length)} หน่วยงาน`} tone="from-emerald-500 to-teal-500" />
-          <Kpi icon={Trophy} title="หน่วยงานคะแนนสูงสุด" value={topDepartment ? formatScore(topDepartment.avg_rating) : "-"} sub={topDepartment?.department_name ?? "ยังไม่มีข้อมูล"} tone="from-amber-500 to-orange-500" />
+          <Kpi icon={Users} title="ผู้ตอบแบบประเมินรวม" value={formatCount(data?.summary.total_responses)} tone="from-sky-500 to-cyan-500" />
+          <Kpi icon={Gauge} title="คะแนนเฉลี่ยภาพรวม" value={formatScore(data?.summary.avg_rating)} tone="from-blue-500 to-indigo-500" />
+          <Kpi icon={MessageSquareText} title="ผลการประเมิน" value={overallBand.label} tone="from-blue-500 to-indigo-500" />
+          <Kpi icon={Building2} title="หน่วยงานที่มีข้อมูล" value={formatCount(activeDepartments)} tone="from-emerald-500 to-teal-500" />
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.1fr_0.9fr]">
