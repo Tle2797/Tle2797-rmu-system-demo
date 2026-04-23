@@ -369,12 +369,12 @@ export default function DashboardReportsPage({
 
               <div className="mt-8 overflow-hidden rounded-[22px] border border-slate-200">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-slate-100 text-slate-700">
+                  <thead className="border-b border-blue-700/20 bg-gradient-to-r from-sky-600 to-blue-600 text-white">
                     <tr>
-                      <th className="w-20 px-4 py-3 text-center font-semibold">ข้อ</th>
-                      <th className="px-4 py-3 text-left font-semibold">คำถาม</th>
-                      <th className="w-40 px-4 py-3 text-center font-semibold">คะแนนเฉลี่ย</th>
-                      <th className="w-48 px-4 py-3 text-center font-semibold">
+                      <th className="w-20 px-4 py-3 text-center font-semibold text-white">ข้อ</th>
+                      <th className="px-4 py-3 text-left font-semibold text-white">คำถาม</th>
+                      <th className="w-40 px-4 py-3 text-center font-semibold text-white">คะแนนเฉลี่ย</th>
+                      <th className="w-48 px-4 py-3 text-center font-semibold text-white">
                         ส่วนเบี่ยงเบนมาตรฐาน
                       </th>
                     </tr>

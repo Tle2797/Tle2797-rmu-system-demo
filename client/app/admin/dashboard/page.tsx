@@ -5,7 +5,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   LabelList,
   ResponsiveContainer,
   Tooltip,
@@ -126,22 +125,6 @@ function resolveBandStyle(avg: number | null, bands: RatingBand[]): {
   return { textClass: "text-red-600", bgClass: "bg-red-50 text-red-700 border-red-200" };
 }
 
-function resolveBandFill(avg: number | null, bands: RatingBand[]): string {
-  const { textClass } = resolveBandStyle(avg, bands);
-  switch (textClass) {
-    case "text-emerald-600":
-      return "#10b981";
-    case "text-blue-600":
-      return "#2563eb";
-    case "text-yellow-600":
-      return "#eab308";
-    case "text-red-600":
-      return "#ef4444";
-    default:
-      return "#0ea5e9";
-  }
-}
-
 const groupLabel: Record<string, string> = {
   student: "นักศึกษา",
   staff: "บุคลากร",
@@ -173,7 +156,15 @@ function formatTime(iso: string): string {
 
 function formatDayLabel(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString("th-TH", { weekday: "short" });
+    const value =
+      /^\d{4}-\d{2}-\d{2}$/.test(iso)
+        ? new Date(`${iso}T12:00:00+07:00`)
+        : new Date(iso);
+
+    return value.toLocaleDateString("th-TH", {
+      weekday: "short",
+      timeZone: "Asia/Bangkok",
+    });
   } catch {
     return iso;
   }
@@ -671,7 +662,9 @@ export default function AdminDashboardPage() {
             </div>
             <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-center backdrop-blur-md">
               <div className="text-3xl font-bold">{avgRating ? avgRating.toFixed(2) : "-"}</div>
-              <div className="mt-0.5 text-xs text-sky-100/80">คะแนนเฉลี่ย / 5</div>
+              <div className="mt-0.5 text-xs text-sky-100/80">
+                {avgRating ? `ผลการประเมิน: ${resolveLabel(avgRating, rating_bands)}` : "ยังไม่มีคะแนนเฉลี่ย"}
+              </div>
             </div>
             <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-center backdrop-blur-md">
               <div className="text-3xl font-bold">{surveys.active}</div>

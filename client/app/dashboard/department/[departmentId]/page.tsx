@@ -6,7 +6,6 @@ import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import {
   BadgeCheck,
   BarChart3,
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
@@ -502,18 +501,18 @@ export default function DepartmentDashboardPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-[920px] w-full border-separate border-spacing-0 text-sm">
-                <thead>
-                  <tr className="text-left text-slate-600">
-                    <th className="w-16 rounded-tl-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-semibold">
+                <thead className="border-b border-blue-700/20 bg-gradient-to-r from-sky-600 to-blue-600 text-white">
+                  <tr className="text-left">
+                    <th className="w-16 rounded-tl-2xl border border-blue-700/20 px-4 py-3 font-semibold text-white">
                       ข้อ
                     </th>
-                    <th className="border border-l-0 border-slate-200 bg-slate-50 px-4 py-3 font-semibold">
+                    <th className="border border-l-0 border-blue-700/20 px-4 py-3 font-semibold text-white">
                       คำถาม
                     </th>
-                    <th className="w-28 border border-l-0 border-slate-200 bg-slate-50 px-4 py-3 text-center font-semibold">
+                    <th className="w-28 border border-l-0 border-blue-700/20 px-4 py-3 text-center font-semibold text-white">
                       ค่าเฉลี่ย
                     </th>
-                    <th className="w-40 rounded-tr-2xl border border-l-0 border-slate-200 bg-slate-50 px-4 py-3 text-center font-semibold whitespace-nowrap">
+                    <th className="w-40 rounded-tr-2xl border border-l-0 border-blue-700/20 px-4 py-3 text-center font-semibold whitespace-nowrap text-white">
                       ส่วนเบี่ยงเบนมาตรฐาน
                     </th>
                   </tr>
