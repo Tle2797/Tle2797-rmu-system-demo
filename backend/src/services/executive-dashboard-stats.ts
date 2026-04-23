@@ -2,6 +2,7 @@ import { db } from "../config/db";
 
 const LOW_RESPONSE_THRESHOLD = 5;
 const LOW_SCORE_THRESHOLD = 3.5;
+const REPORT_TIMEZONE = "Asia/Bangkok";
 
 export async function getExecutiveDashboardStats() {
   const [
@@ -43,14 +44,16 @@ export async function getExecutiveDashboardStats() {
     `),
     db.query(`
       WITH active_responses AS (
-        SELECT r.id, r.submitted_at
+        SELECT
+          r.id,
+          (timezone('${REPORT_TIMEZONE}', r.submitted_at))::date AS submitted_date_local
         FROM responses r
         JOIN surveys s ON s.id = r.survey_id
         WHERE s.is_active = true
       )
       SELECT COUNT(*)::int AS today_count
       FROM active_responses
-      WHERE submitted_at::date = CURRENT_DATE
+      WHERE submitted_date_local = (timezone('${REPORT_TIMEZONE}', now()))::date
     `),
     db.query(
       `
@@ -177,23 +180,28 @@ export async function getExecutiveDashboardStats() {
     ),
     db.query(`
       WITH active_responses AS (
-        SELECT r.id, r.submitted_at
+        SELECT
+          r.id,
+          (timezone('${REPORT_TIMEZONE}', r.submitted_at))::date AS submitted_date_local
         FROM responses r
         JOIN surveys s ON s.id = r.survey_id
         WHERE s.is_active = true
+      ),
+      date_series AS (
+        SELECT generate_series(
+          (timezone('${REPORT_TIMEZONE}', now()))::date - 6,
+          (timezone('${REPORT_TIMEZONE}', now()))::date,
+          '1 day'::interval
+        )::date AS day
       )
       SELECT
-        d.date::date AS day,
+        ds.day,
         COUNT(ar.id)::int AS count
-      FROM generate_series(
-        CURRENT_DATE - interval '6 days',
-        CURRENT_DATE,
-        '1 day'
-      ) AS d(date)
+      FROM date_series ds
       LEFT JOIN active_responses ar
-        ON ar.submitted_at::date = d.date::date
-      GROUP BY d.date
-      ORDER BY d.date ASC
+        ON ar.submitted_date_local = ds.day
+      GROUP BY ds.day
+      ORDER BY ds.day ASC
     `),
     db.query(`
       SELECT id, min_value, max_value, label_th, sort_order
