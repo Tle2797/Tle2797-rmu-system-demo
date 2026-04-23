@@ -19,6 +19,7 @@ import {
 } from "recharts";
 import {
   BarChart3,
+  Building2,
   CalendarDays,
   CircleAlert,
   BadgeCheck,
@@ -41,9 +42,17 @@ type YearlyOverview = {
   avg_rating: number;
 };
 
+type DepartmentDetail = {
+  department_id: number;
+  department_name: string;
+  scores: Record<string, number>;
+  latest_diff: number;
+};
+
 type YearlyStats = {
   years_list: number[];
   yearly_overview: YearlyOverview[];
+  departments_detail: DepartmentDetail[];
   rating_bands: RatingBand[];
 };
 
@@ -57,6 +66,8 @@ type ChartRow = {
 };
 
 type IconType = ComponentType<{ className?: string }>;
+
+const PAGE_SIZE = 10;
 
 const YEARLY_THEME = {
   primary: "from-sky-500 to-cyan-500",
@@ -341,6 +352,7 @@ export default function ExecYearlyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     let alive = true;
@@ -354,6 +366,7 @@ export default function ExecYearlyPage() {
         if (!alive) return;
 
         setData(res);
+        setCurrentPage(1);
       } catch (error) {
         if (!alive) return;
         setError(getErrorMessage(error, "โหลดข้อมูลรายปีไม่สำเร็จ"));
@@ -407,7 +420,30 @@ export default function ExecYearlyPage() {
   );
   const overallEvaluation = resolveBandMeta(overallAverage, ratingBands);
 
+  const comparisonRows = useMemo(() => {
+    const latestBE = yearLabels[yearLabels.length - 1];
+
+    return [...(data?.departments_detail ?? [])].sort((left, right) => {
+      const leftScore = latestBE ? parseScore(left.scores[String(latestBE)]) ?? -1 : -1;
+      const rightScore = latestBE ? parseScore(right.scores[String(latestBE)]) ?? -1 : -1;
+
+      if (leftScore !== rightScore) {
+        return rightScore - leftScore;
+      }
+
+      return left.department_name.localeCompare(right.department_name, "th");
+    });
+  }, [data?.departments_detail, yearLabels]);
+
+  const totalPages = Math.max(1, Math.ceil(comparisonRows.length / PAGE_SIZE));
+
+  const paginatedComparisonRows = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return comparisonRows.slice(start, start + PAGE_SIZE);
+  }, [comparisonRows, currentPage]);
+
   const hasChartData = chartData.some((item) => item.avg_rating !== null);
+  const totalDepartments = data?.departments_detail.length ?? 0;
   const yearsWithData = chartData.filter((item) => item.has_data).length;
   const latestYear = chartData[chartData.length - 1] ?? null;
   const rangeStart = yearLabels[0] ?? fallbackYears[0];
@@ -620,6 +656,107 @@ export default function ExecYearlyPage() {
               );
             })}
           </div>
+        </SectionCard>
+
+        <SectionCard
+          title="ตารางการเปรียบเทียบหน่วยงานรายปี"
+          icon={Building2}
+          right={`ทั้งหมด ${formatCount(totalDepartments)} หน่วยงาน`}
+        >
+          <div className="overflow-x-auto">
+            <table className="min-w-full whitespace-nowrap text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-600">
+                  <th className="px-4 py-3 text-center font-semibold">ลำดับ</th>
+                  <th className="px-4 py-3 text-left font-semibold">หน่วยงาน</th>
+                  {yearLabels.map((yearBE) => (
+                    <th key={yearBE} className="px-4 py-3 text-center font-semibold">
+                      พ.ศ. {yearBE}
+                    </th>
+                  ))}
+                  <th className="px-4 py-3 text-center font-semibold">ผลต่างล่าสุด</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonRows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={yearLabels.length + 3}
+                      className="px-4 py-10 text-center text-slate-400"
+                    >
+                      ยังไม่มีข้อมูลรายปีของหน่วยงาน
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedComparisonRows.map((department, index) => (
+                    <tr
+                      key={department.department_id}
+                      className="border-b border-slate-100 transition last:border-b-0 hover:bg-sky-50/40"
+                    >
+                      <td className="px-4 py-3 text-center text-slate-500">
+                        {(currentPage - 1) * PAGE_SIZE + index + 1}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-slate-900">
+                        {department.department_name}
+                      </td>
+                      {yearLabels.map((yearBE) => {
+                        const score = parseScore(department.scores[String(yearBE)]);
+
+                        return (
+                          <td
+                            key={`${department.department_id}-${yearBE}`}
+                            className="px-4 py-3 text-center text-slate-600"
+                          >
+                            {score === null ? "-" : score.toFixed(2)}
+                          </td>
+                        );
+                      })}
+                      <td className="px-4 py-3 text-center font-semibold">
+                        {department.latest_diff > 0 ? (
+                          <span className="text-emerald-600">
+                            +{department.latest_diff.toFixed(2)}
+                          </span>
+                        ) : department.latest_diff < 0 ? (
+                          <span className="text-rose-600">
+                            {department.latest_diff.toFixed(2)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">0.00</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {comparisonRows.length > 0 ? (
+            <div className="flex flex-col gap-3 border-t border-slate-200/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={currentPage === 1}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  ย้อนกลับ
+                </button>
+                <div className="rounded-xl bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700">
+                  หน้า {currentPage} / {totalPages}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={currentPage === totalPages}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  ถัดไป
+                </button>
+              </div>
+            </div>
+          ) : null}
         </SectionCard>
       </div>
     </main>
