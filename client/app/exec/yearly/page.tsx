@@ -532,7 +532,6 @@ export default function ExecYearlyPage() {
             icon={LineChart}
             label="คะแนนเฉลี่ยปีล่าสุด"
             value={formatScore(latestYear?.avg_rating)}
-            sub={latestYear ? `ผลการประเมิน ${latestYear.evaluation_label}` : undefined}
             cardClass="border-slate-200/80 bg-white/95"
             iconClass={YEARLY_THEME.primary}
             valueClass="text-2xl"
