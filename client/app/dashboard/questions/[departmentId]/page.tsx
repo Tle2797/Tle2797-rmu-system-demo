@@ -651,8 +651,8 @@ export default function DepartmentQuestionsPage() {
                           <div className="flex items-center justify-center gap-2">
                             <ToggleSwitch checked={row.status === "active"} onChange={() => toggleActive(row)} disabled={busy} title={row.status === "active" ? "คลิกเพื่อปิดใช้งานคำถาม" : "คลิกเพื่อเปิดใช้งานคำถาม"} />
                             <div className="mx-1 h-5 w-px bg-slate-200" />
-                            <button type="button" onClick={() => openEdit(row)} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50" disabled={busy}>แก้ไข</button>
-                            <button type="button" onClick={() => deleteQuestion(row)} className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-50" disabled={busy}>ลบ</button>
+                            <button type="button" onClick={() => openEdit(row)} className="rounded-xl border border-amber-500 bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-amber-600 hover:bg-amber-600 disabled:opacity-50" disabled={busy}>แก้ไข</button>
+                            <button type="button" onClick={() => deleteQuestion(row)} className="rounded-xl border border-red-500 bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-red-600 hover:bg-red-600 disabled:opacity-50" disabled={busy}>ลบ</button>
                           </div>
                         </td>
                       )}

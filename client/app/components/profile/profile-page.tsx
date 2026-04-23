@@ -680,7 +680,7 @@ export default function ProfilePage() {
                 type="button"
                 onClick={openProfileEditor}
                 disabled={busy || uploading}
-                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 px-6 py-3 font-semibold text-white shadow-[0_16px_35px_rgba(37,99,235,0.22)] transition hover:from-sky-500 hover:to-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 px-6 py-3 font-semibold text-white shadow-[0_16px_35px_rgba(245,158,11,0.22)] transition hover:from-amber-400 hover:to-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 แก้ไขข้อมูล
               </button>

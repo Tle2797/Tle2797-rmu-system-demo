@@ -10,9 +10,9 @@ type Department = {
   name: string;
 };
 
-const MOBILE_PAGE_SIZE = 7;
-const TABLET_PAGE_SIZE = 8;
-const DESKTOP_PAGE_SIZE = 9;
+const MOBILE_PAGE_SIZE = 10;
+const TABLET_PAGE_SIZE = 10;
+const DESKTOP_PAGE_SIZE = 10;
 
 function getDepartmentPageSize(viewportWidth: number) {
   if (viewportWidth >= 1024) return DESKTOP_PAGE_SIZE;

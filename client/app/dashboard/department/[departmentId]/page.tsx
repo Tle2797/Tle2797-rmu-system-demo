@@ -76,6 +76,7 @@ type CommentsResponse = {
 };
 
 type IconType = ComponentType<{ className?: string }>;
+const COMMENTS_PAGE_SIZE = 10;
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) return error.message;
@@ -283,8 +284,9 @@ export default function DepartmentDashboardPage() {
     : params.departmentId;
   const deptId = Number(departmentParam);
 
-  const limit = Math.max(1, Math.min(Number(searchParams.get("limit")) || 3, 50));
-  const offset = Math.max(Number(searchParams.get("offset")) || 0, 0);
+  const rawOffset = Math.max(Number(searchParams.get("offset")) || 0, 0);
+  const limit = COMMENTS_PAGE_SIZE;
+  const offset = Math.floor(rawOffset / COMMENTS_PAGE_SIZE) * COMMENTS_PAGE_SIZE;
 
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [comments, setComments] = useState<CommentsResponse | null>(null);
