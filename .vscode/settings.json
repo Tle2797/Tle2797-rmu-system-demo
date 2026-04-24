@@ -1,0 +1,14 @@
+{
+  "files.encoding": "utf8",
+  "terminal.integrated.profiles.windows": {
+    "PowerShell UTF-8 (Workspace)": {
+      "source": "PowerShell",
+      "args": [
+        "-NoExit",
+        "-Command",
+        "$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false); $PSDefaultParameterValues['Get-Content:Encoding'] = 'utf8'; $PSDefaultParameterValues['Set-Content:Encoding'] = 'utf8'; $PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'; $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'; chcp.com 65001 > $null"
+      ]
+    }
+  },
+  "terminal.integrated.defaultProfile.windows": "PowerShell UTF-8 (Workspace)"
+}
