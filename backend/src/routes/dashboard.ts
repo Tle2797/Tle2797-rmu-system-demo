@@ -82,21 +82,35 @@ export let dashboardRoute = new Elysia({ prefix: "/api/dashboard" })
       SELECT
         q.id AS question_id,
         q.text AS question_text,
+        q.type AS question_type,
         COUNT(a.rating)::int AS n,
-        ROUND(AVG(a.rating)::numeric, 2) AS avg,
-        ROUND(stddev_samp(a.rating)::numeric, 2) AS sd,
+        CASE
+          WHEN q.type = 'rating' THEN ROUND(AVG(a.rating)::numeric, 2)
+          ELSE NULL
+        END AS avg,
+        CASE
+          WHEN q.type = 'rating' THEN ROUND(stddev_samp(a.rating)::numeric, 2)
+          ELSE NULL
+        END AS sd,
         COUNT(*) FILTER (WHERE a.rating = 1)::int AS r1,
         COUNT(*) FILTER (WHERE a.rating = 2)::int AS r2,
         COUNT(*) FILTER (WHERE a.rating = 3)::int AS r3,
         COUNT(*) FILTER (WHERE a.rating = 4)::int AS r4,
         COUNT(*) FILTER (WHERE a.rating = 5)::int AS r5
       FROM questions q
-      JOIN answers a   ON a.question_id = q.id
-      JOIN responses r ON r.id = a.response_id
+      LEFT JOIN responses r
+        ON r.survey_id = q.survey_id
+       AND r.department_id = $2
+      LEFT JOIN answers a
+        ON a.response_id = r.id
+       AND a.question_id = q.id
       WHERE q.survey_id = $1
-        AND r.department_id = $2
-        AND q.type = 'rating'
-      GROUP BY q.id, q.text
+        AND q.status = 'active'
+        AND (
+          q.scope = 'central'
+          OR (q.scope = 'department' AND q.department_id = $2)
+        )
+      GROUP BY q.id, q.text, q.type
       ORDER BY q.display_order ASC, q.id ASC
       `,
       [survey.id, departmentId],

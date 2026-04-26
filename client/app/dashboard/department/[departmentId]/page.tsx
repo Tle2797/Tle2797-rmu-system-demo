@@ -29,8 +29,9 @@ type KPI = {
 type RatingRow = {
   question_id: number;
   question_text: string;
+  question_type: "rating" | "text";
   n: number;
-  avg: number | string;
+  avg: number | string | null;
   sd: number | string | null;
   r1: number;
   r2: number;
@@ -380,10 +381,11 @@ export default function DepartmentDashboardPage() {
   const ratings = summary?.ratings ?? [];
   const cm = comments ?? { total: 0, limit, offset, items: [] };
 
-  const totalN = ratings.reduce((acc, row) => acc + toNum(row.n), 0);
+  const scoreRows = ratings.filter((row) => row.question_type === "rating");
+  const totalN = scoreRows.reduce((acc, row) => acc + toNum(row.n), 0);
   const overallAvg =
     totalN > 0
-      ? ratings.reduce((acc, row) => acc + toNum(row.avg) * toNum(row.n), 0) / totalN
+      ? scoreRows.reduce((acc, row) => acc + toNum(row.avg) * toNum(row.n), 0) / totalN
       : null;
   const bands = summary?.rating_bands ?? [];
   const overallLabel = resolveOverallLabel(overallAvg, bands);
@@ -531,10 +533,14 @@ export default function DepartmentDashboardPage() {
                         </div>
                       </td>
                       <td className="border border-l-0 border-t-0 border-slate-200 px-4 py-3 text-center tabular-nums text-slate-900 group-hover:bg-sky-50/40">
-                        {toNum(row.avg).toFixed(2)}
+                        {row.question_type === "rating" && row.avg !== null
+                          ? toNum(row.avg).toFixed(2)
+                          : "-"}
                       </td>
                       <td className="border border-l-0 border-t-0 border-slate-200 px-4 py-3 text-center tabular-nums whitespace-nowrap text-slate-900 group-hover:bg-sky-50/40">
-                        {row.sd === null ? "-" : toNum(row.sd).toFixed(2)}
+                        {row.question_type === "rating" && row.sd !== null
+                          ? toNum(row.sd).toFixed(2)
+                          : "-"}
                       </td>
                     </tr>
                   ))}

@@ -111,15 +111,12 @@ function isQuestionDeleteResponse(value: unknown): value is QuestionDeleteRespon
 
 function getQuestionUsageText(
   answerCount: number,
-  responseCount: number,
   type: QuestionType,
 ) {
   const answerLabel = type === "rating" ? "การให้คะแนน" : "คำตอบ";
   return `คำถามนี้มี${answerLabel}แล้ว ${answerCount.toLocaleString(
     "th-TH",
-  )} รายการ จาก ${responseCount.toLocaleString(
-    "th-TH",
-  )} แบบประเมิน\nหากลบ ระบบจะลบข้อมูลของข้อนี้ออกและคำนวณผลประเมินใหม่ตามข้อมูลที่เหลือ`;
+  )} รายการ จากแบบประเมิน\nหากลบ ระบบจะลบข้อมูลของข้อนี้ออกและคำนวณผลประเมินใหม่ตามข้อมูลที่เหลือ`;
 }
 
 async function showSuccessAlert(title: string, text: string) {
@@ -454,7 +451,6 @@ export default function DepartmentQuestionsPage() {
         text: hasRecordedAnswers
           ? `${getQuestionUsageText(
               row.answer_count,
-              row.response_count,
               row.type,
             )}\n\nต้องการลบคำถาม "${row.text}" ใช่ไหม?`
           : `ต้องการลบคำถาม "${row.text}" ใช่ไหม?\nการกระทำนี้ไม่สามารถย้อนกลับได้`,
@@ -487,7 +483,6 @@ export default function DepartmentQuestionsPage() {
             title: "คำถามนี้มีการประเมินแล้ว",
             text: `${getQuestionUsageText(
               response.data.answer_count ?? row.answer_count,
-              response.data.response_count ?? row.response_count,
               row.type,
             )}\n\nต้องการลบคำถาม "${row.text}" ใช่ไหม?`,
             showCancelButton: true,
@@ -639,8 +634,7 @@ export default function DepartmentQuestionsPage() {
                         <div className="font-medium">{row.text}</div>
                         {row.has_answers && (
                           <div className="mt-1 text-xs text-amber-700">
-                            มีข้อมูลการประเมินแล้ว {row.answer_count.toLocaleString("th-TH")} รายการ จาก{" "}
-                            {row.response_count.toLocaleString("th-TH")} แบบประเมิน
+                            มีข้อมูลการประเมินแล้ว {row.answer_count.toLocaleString("th-TH")} รายการ จากแบบประเมิน
                           </div>
                         )}
                       </td>
