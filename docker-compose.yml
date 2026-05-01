@@ -1,0 +1,68 @@
+
+services:
+  frontend:
+    build: 
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: iqa_frontend_service
+    ports:
+      - "3481:3481"
+    restart: unless-stopped
+    env_file:
+      - ./client/.env.production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3481"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    networks:
+      - app-network
+
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: iqa_backend_service
+    restart: unless-stopped
+    ports:
+      - "8481:8481"
+    env_file:
+      - ./backend/.env.production
+    volumes:
+      - uploads_data:/app/public/uploads  # ใช้ named volume แทน bind mount
+    # depends_on:
+    #   - database  # ถ้ามี database service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8481/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    networks:
+      - app-network
+
+  # เพิ่ม database service ถ้าต้องการ
+  # database:
+  #   image: postgres:15
+  #   container_name: postgres_db
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_DB: your_db_name
+  #     POSTGRES_USER: your_user
+  #     POSTGRES_PASSWORD: your_password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #     - ./database-schema.sql:/docker-entrypoint-initdb.d/init.sql
+  #   ports:
+  #     - "5432:5432"
+  #   networks:
+  #     - app-network
+
+volumes:
+  uploads_data:
+  # postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
