@@ -7,7 +7,7 @@ import Link from "next/link";
 import { apiPost } from "@/lib/api";
 import { getThaiAlertMessage } from "@/lib/alert-message";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Lock, User } from "lucide-react";
+import { Eye, EyeOff, Lock, User, UserPlus } from "lucide-react";
 import Swal from "sweetalert2";
 
 type LoginRes = {
@@ -201,6 +201,28 @@ export default function LoginPage() {
                   >
                     ลืมรหัสผ่าน?
                   </Link>
+                </div>
+
+                <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sky-700 shadow-sm">
+                      <UserPlus size={18} />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold text-slate-800">
+                        ลงทะเบียนเพื่อใช้งานระบบ
+                      </h3>
+                      <p className="mt-1 text-sm leading-5 text-slate-500">
+                        สำหรับบุคคลากรที่ยังไม่ได้เป็นสมาชิกกรุณาลงทะเบียน
+                      </p>
+                      <Link
+                        href="/register"
+                        className="mt-3 inline-flex h-9 items-center justify-center rounded-xl border border-sky-200 bg-white px-3 text-sm font-semibold text-sky-700 transition hover:border-sky-300 hover:bg-sky-50"
+                      >
+                        ลงทะเบียน
+                      </Link>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Submit */}

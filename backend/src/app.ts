@@ -51,6 +51,7 @@ export const app = new Elysia()
 
     const publicExactPaths = new Set([
       "/api/auth/login",
+      "/api/auth/register",
       "/api/auth/forgot-password/request-otp",
       "/api/auth/forgot-password/verify-otp",
       "/api/auth/forgot-password/reset",

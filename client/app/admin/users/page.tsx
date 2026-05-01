@@ -55,12 +55,37 @@ const inputClass =
 const selectClass =
   "w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-800 shadow-sm outline-none transition hover:border-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-100 disabled:cursor-not-allowed disabled:bg-slate-50";
 
-function RoleBadge({ roleName }: { roleName: string }) {
+function RoleBadge({
+  role,
+  roleName,
+}: {
+  role: RoleCode;
+  roleName: string;
+}) {
+  const roleClass: Record<RoleCode, string> = {
+    admin: "border-violet-200 bg-violet-50 text-violet-700",
+    exec: "border-amber-200 bg-amber-50 text-amber-700",
+    dept_head: "border-sky-200 bg-sky-50 text-sky-700",
+    staff: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  };
+
   return (
-    <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
-      {roleName}
+    <span className={`inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${roleClass[role]}`}>
+      <span className="whitespace-normal leading-4">{roleName}</span>
     </span>
   );
+}
+
+function formatFullName(
+  title: string | null,
+  firstName: string | null,
+  lastName: string | null,
+) {
+  const firstPart = `${title ?? ""}${firstName ?? ""}`.trim();
+  const lastPart = (lastName ?? "").trim();
+
+  if (firstPart && lastPart) return `${firstPart} ${lastPart}`;
+  return firstPart || lastPart || "-";
 }
 
 type KpiIcon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -780,12 +805,12 @@ export default function AdminUsersPage() {
               <thead className="border-b border-blue-700/20 bg-gradient-to-r from-sky-600 to-blue-600 text-white">
                 <tr>
                   <th className="w-[5%] px-3 py-3 text-center font-semibold">ลำดับ</th>
-                  <th className="w-[16%] px-3 py-3 text-left font-semibold">ชื่อ นามสกุล</th>
+                  <th className="w-[14%] px-3 py-3 text-left font-semibold">ตำแหน่ง</th>
+                  <th className="w-[18%] px-3 py-3 text-left font-semibold">หน่วยงาน</th>
+                  <th className="w-[18%] px-3 py-3 text-left font-semibold">ชื่อ นามสกุล</th>
                   <th className="w-[10%] px-3 py-3 text-left font-semibold">ชื่อผู้ใช้</th>
                   <th className="w-[18%] px-3 py-3 text-left font-semibold">อีเมล</th>
-                  <th className="w-[15%] px-3 py-3 text-left font-semibold">ตำแหน่ง</th>
-                  <th className="w-[18%] px-3 py-3 text-left font-semibold">หน่วยงาน</th>
-                  <th className="w-[8%] px-3 py-3 text-center font-semibold">สถานะ</th>
+                  <th className="w-[7%] px-3 py-3 text-center font-semibold">สถานะ</th>
                   <th className="w-[10%] px-3 py-3 text-center font-semibold">การทำงาน</th>
                 </tr>
               </thead>
@@ -806,8 +831,20 @@ export default function AdminUsersPage() {
                           {startItem + idx}
                         </td>
 
+                        <td className="px-3 py-3">
+                          <RoleBadge role={u.role} roleName={u.role_name ?? u.role} />
+                        </td>
+
+                        <td className="px-3 py-3 leading-5 text-slate-700">
+                          <span className="block whitespace-normal break-words leading-5" title={u.department_name || undefined}>
+                            {u.department_name || "-"}
+                          </span>
+                        </td>
+
                         <td className="px-3 py-3 font-medium leading-5 text-slate-900">
-                          {[u.title, u.first_name, u.last_name].filter(Boolean).join(" ") || "-"}
+                          <span className="block truncate" title={formatFullName(u.title, u.first_name, u.last_name)}>
+                            {formatFullName(u.title, u.first_name, u.last_name)}
+                          </span>
                         </td>
 
                         <td className="px-3 py-3 text-slate-600">
@@ -819,16 +856,6 @@ export default function AdminUsersPage() {
                         <td className="px-3 py-3 text-slate-600">
                           <span className="block truncate" title={u.email || "-"}>
                             {u.email || "-"}
-                          </span>
-                        </td>
-
-                        <td className="px-3 py-3">
-                          <RoleBadge roleName={u.role_name ?? u.role} />
-                        </td>
-
-                        <td className="px-3 py-3 leading-5 text-slate-700">
-                          <span title={u.department_name || undefined}>
-                            {u.department_name || "-"}
                           </span>
                         </td>
 
@@ -1055,7 +1082,7 @@ export default function AdminUsersPage() {
                   {/* Username */}
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                      ชื่อผู้ใช้
+                      ชื่อผู้เข้าใช้งานระบบ
                     </label>
                     {editing ? (
                       <div className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-700">

@@ -45,6 +45,11 @@ const exactTranslations: Record<string, string> = {
   "email/otp is required": "กรุณากรอกอีเมลและรหัส OTP",
   "resetToken/password is required": "ข้อมูลรีเซ็ตรหัสผ่านไม่ครบถ้วน",
   "Invalid credentials": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+  "User approval pending":
+    "บัญชีผู้ใช้นี้อยู่ระหว่างรอการอนุมัติจากผู้ดูแลระบบ",
+  "User registration rejected": "บัญชีผู้ใช้นี้ไม่ได้รับการอนุมัติ",
+  "User is inactive": "บัญชีผู้ใช้นี้ถูกปิดใช้งาน",
+  "รูปแบบอีเมลไม่ถูกต้อง": "รูปแบบอีเมลไม่ถูกต้อง",
   "Unauthorized: missing token":
     "ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่อีกครั้ง",
   "Unauthorized: invalid or expired token":

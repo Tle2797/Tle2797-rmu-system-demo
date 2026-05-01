@@ -10,6 +10,7 @@ import {
   MessageSquareText,
   QrCode,
   Trophy,
+  UserCheck,
   UserRound,
   Users,
   type LucideIcon,
@@ -36,10 +37,16 @@ export const SIDEBAR_MENU: Record<Role, SidebarItem[]> = {
       icon: LayoutDashboard,
     },
     {
-      label: "จัดการผู้ใช้",
+      label: "จัดการผู้ใช้งาน",
       path: "/admin/users",
       matchPaths: ["/admin/users"],
       icon: Users,
+    },
+    {
+      label: "อนุมัติผู้ใช้งาน",
+      path: "/admin/user-approvals",
+      matchPaths: ["/admin/user-approvals"],
+      icon: UserCheck,
     },
     {
       label: "จัดการหน่วยงาน",

@@ -1,8 +1,11 @@
 import { Elysia, t } from "elysia";
 import {
+  approveUserRegistration,
   createUser,
   deleteUser,
+  listUserApprovals,
   listUsers,
+  rejectUserRegistration,
   updateAdminProfile,
   updateUser,
   uploadAdminProfileImage,
@@ -10,6 +13,16 @@ import {
 
 export const adminUsersRoute = new Elysia({ prefix: "/api/admin" })
   .get("/users", listUsers)
+  .get("/user-approvals", listUserApprovals)
+  .put("/user-approvals/:id/approve", approveUserRegistration, {
+    params: t.Object({ id: t.String() }),
+  })
+  .put("/user-approvals/:id/reject", rejectUserRegistration, {
+    params: t.Object({ id: t.String() }),
+    body: t.Object({
+      reason: t.Optional(t.String()),
+    }),
+  })
   .post("/users", createUser, {
     body: t.Object({
       username: t.String(),

@@ -4,6 +4,7 @@ import {
   ProfileImageUploadError,
   saveProfileImage,
 } from "../services/profile-image";
+import { authenticateRequest } from "../utils/auth";
 
 export async function listUsers() {
   const res = await db.query(
@@ -18,12 +19,18 @@ export async function listUsers() {
       u.title,
       u.first_name,
       u.last_name,
+      u.approval_status,
+      u.registration_source,
+      u.approval_reviewed_by,
+      u.approval_reviewed_at,
+      u.rejected_reason,
       u.profile_image_url,
       u.updated_at,
       u.created_at,
       d.name AS department_name
     FROM users u
     LEFT JOIN departments d ON d.id = u.department_id
+    WHERE u.approval_status = 'approved'
     ORDER BY u.created_at DESC, u.id DESC
     `,
   );
@@ -82,9 +89,22 @@ export async function createUser({ body, set }: any) {
 
   const ins = await db.query(
     `
-    INSERT INTO users (username, password_hash, role, department_id, is_active, title, first_name, last_name, email)
-    VALUES ($1, $2, $3, $4, true, $5, $6, $7, $8)
-    RETURNING id, username, email, role, department_id, is_active, title, first_name, last_name, profile_image_url, updated_at
+    INSERT INTO users (
+      username,
+      password_hash,
+      role,
+      department_id,
+      is_active,
+      title,
+      first_name,
+      last_name,
+      email,
+      approval_status,
+      registration_source,
+      approval_reviewed_at
+    )
+    VALUES ($1, $2, $3, $4, true, $5, $6, $7, $8, 'approved', 'admin', NOW())
+    RETURNING id, username, email, role, department_id, is_active, title, first_name, last_name, approval_status, registration_source, profile_image_url, updated_at
     `,
     [username, password_hash, role, department_id, title, first_name, last_name, email],
   );
@@ -122,7 +142,7 @@ export async function updateUser({ params, body, set }: any) {
       SET is_active = $2,
           updated_at = NOW()
       WHERE id = $1
-      RETURNING id, username, email, role, department_id, is_active, title, first_name, last_name, profile_image_url, updated_at
+      RETURNING id, username, email, role, department_id, is_active, title, first_name, last_name, approval_status, registration_source, profile_image_url, updated_at
       `,
       [id, body.is_active],
     );
@@ -194,7 +214,7 @@ export async function updateUser({ params, body, set }: any) {
           email = $9,
           updated_at = NOW()
       WHERE id = $1
-      RETURNING id, username, email, role, department_id, is_active, title, first_name, last_name, profile_image_url, updated_at
+      RETURNING id, username, email, role, department_id, is_active, title, first_name, last_name, approval_status, registration_source, profile_image_url, updated_at
       `,
       [id, username, role, department_id, password_hash, title, first_name, last_name, email],
     );
@@ -213,9 +233,191 @@ export async function updateUser({ params, body, set }: any) {
         email = $8,
         updated_at = NOW()
     WHERE id = $1
-    RETURNING id, username, email, role, department_id, is_active, title, first_name, last_name, profile_image_url, updated_at
+    RETURNING id, username, email, role, department_id, is_active, title, first_name, last_name, approval_status, registration_source, profile_image_url, updated_at
     `,
     [id, username, role, department_id, title, first_name, last_name, email],
+  );
+
+  return { item: up.rows[0] };
+}
+
+type ApprovalStatus = "pending" | "approved" | "rejected";
+
+const approvalStatuses = new Set(["pending", "approved", "rejected"]);
+
+function parseApprovalUserId(raw: unknown) {
+  const id = Number(raw);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+function buildApprovalCounts(rows: Array<{ approval_status: ApprovalStatus; total: number }>) {
+  const counts: Record<ApprovalStatus, number> = {
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  };
+
+  for (const row of rows) {
+    if (approvalStatuses.has(row.approval_status)) {
+      counts[row.approval_status] = Number(row.total) || 0;
+    }
+  }
+
+  return counts;
+}
+
+export async function listUserApprovals({ query }: any) {
+  const requestedStatus = String(query?.status || "pending");
+  const status =
+    requestedStatus === "all" || approvalStatuses.has(requestedStatus)
+      ? requestedStatus
+      : "pending";
+
+  const values: unknown[] = [];
+  const where = [`u.registration_source = 'self'`];
+
+  if (status !== "all") {
+    values.push(status);
+    where.push(`u.approval_status = $${values.length}`);
+  }
+
+  const res = await db.query(
+    `
+    SELECT
+      u.id,
+      u.username,
+      u.email,
+      u.role,
+      u.department_id,
+      u.is_active,
+      u.title,
+      u.first_name,
+      u.last_name,
+      u.approval_status,
+      u.registration_source,
+      u.approval_reviewed_by,
+      u.approval_reviewed_at,
+      u.rejected_reason,
+      u.created_at,
+      u.updated_at,
+      d.name AS department_name,
+      reviewer.username AS approval_reviewed_by_username,
+      reviewer.title AS reviewer_title,
+      reviewer.first_name AS reviewer_first_name,
+      reviewer.last_name AS reviewer_last_name
+    FROM users u
+    LEFT JOIN departments d ON d.id = u.department_id
+    LEFT JOIN users reviewer ON reviewer.id = u.approval_reviewed_by
+    WHERE ${where.join(" AND ")}
+    ORDER BY
+      CASE u.approval_status
+        WHEN 'pending' THEN 1
+        WHEN 'approved' THEN 2
+        WHEN 'rejected' THEN 3
+        ELSE 4
+      END,
+      u.created_at DESC,
+      u.id DESC
+    `,
+    values,
+  );
+
+  const countRes = await db.query(
+    `
+    SELECT approval_status, COUNT(*)::int AS total
+    FROM users
+    WHERE registration_source = 'self'
+    GROUP BY approval_status
+    `,
+  );
+
+  return {
+    total: res.rowCount,
+    counts: buildApprovalCounts(countRes.rows),
+    items: res.rows,
+  };
+}
+
+export async function approveUserRegistration({ params, request, set }: any) {
+  const id = parseApprovalUserId(params.id);
+  if (!id) {
+    set.status = 400;
+    return { message: "รหัสผู้ใช้ไม่ถูกต้อง" };
+  }
+
+  const currentUser = await authenticateRequest(request);
+  const existed = await db.query(
+    `
+    SELECT id, approval_status
+    FROM users
+    WHERE id = $1
+      AND registration_source = 'self'
+    LIMIT 1
+    `,
+    [id],
+  );
+
+  if ((existed.rowCount ?? 0) === 0) {
+    set.status = 404;
+    return { message: "ไม่พบข้อมูลผู้ลงทะเบียน" };
+  }
+
+  const up = await db.query(
+    `
+    UPDATE users
+    SET approval_status = 'approved',
+        is_active = true,
+        approval_reviewed_by = $2,
+        approval_reviewed_at = NOW(),
+        rejected_reason = NULL,
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING id, username, email, role, department_id, is_active, title, first_name, last_name, approval_status, registration_source, approval_reviewed_by, approval_reviewed_at, rejected_reason, created_at, updated_at
+    `,
+    [id, currentUser.id],
+  );
+
+  return { item: up.rows[0] };
+}
+
+export async function rejectUserRegistration({ params, body, request, set }: any) {
+  const id = parseApprovalUserId(params.id);
+  if (!id) {
+    set.status = 400;
+    return { message: "รหัสผู้ใช้ไม่ถูกต้อง" };
+  }
+
+  const currentUser = await authenticateRequest(request);
+  const reason = body?.reason ? String(body.reason).trim() : null;
+  const existed = await db.query(
+    `
+    SELECT id, approval_status
+    FROM users
+    WHERE id = $1
+      AND registration_source = 'self'
+    LIMIT 1
+    `,
+    [id],
+  );
+
+  if ((existed.rowCount ?? 0) === 0) {
+    set.status = 404;
+    return { message: "ไม่พบข้อมูลผู้ลงทะเบียน" };
+  }
+
+  const up = await db.query(
+    `
+    UPDATE users
+    SET approval_status = 'rejected',
+        is_active = false,
+        approval_reviewed_by = $2,
+        approval_reviewed_at = NOW(),
+        rejected_reason = $3,
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING id, username, email, role, department_id, is_active, title, first_name, last_name, approval_status, registration_source, approval_reviewed_by, approval_reviewed_at, rejected_reason, created_at, updated_at
+    `,
+    [id, currentUser.id, reason],
   );
 
   return { item: up.rows[0] };

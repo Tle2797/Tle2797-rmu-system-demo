@@ -14,6 +14,140 @@ import {
   type JwtUser,
 } from "../utils/auth";
 
+const TITLE_OPTIONS = new Set(["นาย", "นาง", "นางสาว"]);
+const PUBLIC_REGISTER_ROLES = new Set(["dept_head", "staff"]);
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+export async function registerUser({ body, set }: any) {
+  const payload = body as any;
+  const role = String(payload?.role || "").trim();
+  const departmentId = Number(payload?.department_id);
+  const title = String(payload?.title || "").trim();
+  const firstName = String(payload?.first_name || "").trim();
+  const lastName = String(payload?.last_name || "").trim();
+  const username = String(payload?.username || "").trim();
+  const password = String(payload?.password || "");
+  const confirmPassword = String(payload?.confirmPassword || "");
+  const email = String(payload?.email || "").trim().toLowerCase();
+
+  if (!PUBLIC_REGISTER_ROLES.has(role)) {
+    set.status = 400;
+    return { message: "กรุณาเลือกตำแหน่ง" };
+  }
+
+  if (!Number.isFinite(departmentId) || departmentId <= 0) {
+    set.status = 400;
+    return { message: "กรุณาเลือกหน่วยงาน" };
+  }
+
+  if (!TITLE_OPTIONS.has(title)) {
+    set.status = 400;
+    return { message: "กรุณาเลือกคำนำหน้า" };
+  }
+
+  if (!firstName) {
+    set.status = 400;
+    return { message: "กรุณากรอกชื่อ" };
+  }
+
+  if (!lastName) {
+    set.status = 400;
+    return { message: "กรุณากรอกนามสกุล" };
+  }
+
+  if (!username) {
+    set.status = 400;
+    return { message: "กรุณากรอกชื่อผู้ใช้" };
+  }
+
+  if (!password || password.length < 8) {
+    set.status = 400;
+    return { message: "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร" };
+  }
+
+  if (password !== confirmPassword) {
+    set.status = 400;
+    return { message: "รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน" };
+  }
+
+  if (!email) {
+    set.status = 400;
+    return { message: "กรุณากรอกอีเมล" };
+  }
+
+  if (!isValidEmail(email)) {
+    set.status = 400;
+    return { message: "รูปแบบอีเมลไม่ถูกต้อง" };
+  }
+
+  const departmentRes = await db.query(
+    `SELECT id FROM departments WHERE id = $1 AND is_active = true LIMIT 1`,
+    [departmentId],
+  );
+  if ((departmentRes.rowCount ?? 0) === 0) {
+    set.status = 400;
+    return { message: "ไม่พบหน่วยงานที่เลือก" };
+  }
+
+  const dupUsername = await db.query(
+    `SELECT 1 FROM users WHERE username = $1 LIMIT 1`,
+    [username],
+  );
+  if ((dupUsername.rowCount ?? 0) > 0) {
+    set.status = 409;
+    return { message: "ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว" };
+  }
+
+  const dupEmail = await db.query(
+    `SELECT 1 FROM users WHERE lower(email) = $1 LIMIT 1`,
+    [email],
+  );
+  if ((dupEmail.rowCount ?? 0) > 0) {
+    set.status = 409;
+    return { message: "อีเมลนี้มีอยู่ในระบบแล้ว" };
+  }
+
+  const passwordHash = await hashPassword(password);
+  const insertRes = await db.query(
+    `
+    INSERT INTO users (
+      username,
+      password_hash,
+      role,
+      department_id,
+      is_active,
+      title,
+      first_name,
+      last_name,
+      email,
+      approval_status,
+      registration_source
+    )
+    VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, 'pending', 'self')
+    RETURNING id, username, email, role, department_id, title, first_name, last_name, approval_status, created_at
+    `,
+    [
+      username,
+      passwordHash,
+      role,
+      departmentId,
+      title,
+      firstName,
+      lastName,
+      email,
+    ],
+  );
+
+  set.status = 201;
+  return {
+    message: "ลงทะเบียนสำเร็จ กรุณารอการอนุมัติจากผู้ดูแลระบบ",
+    item: insertRes.rows[0],
+  };
+}
+
 export async function login({ body, set }: any) {
   const payload = body as any;
   const username = String(payload?.username || "").trim();
@@ -26,7 +160,7 @@ export async function login({ body, set }: any) {
 
   const userRes = await db.query(
     `
-    SELECT id, username, password_hash, role, department_id, is_active
+    SELECT id, username, password_hash, role, department_id, is_active, approval_status
     FROM users
     WHERE username = $1
     LIMIT 1
@@ -40,6 +174,16 @@ export async function login({ body, set }: any) {
   }
 
   const u = userRes.rows[0];
+
+  if (u.approval_status === "pending") {
+    set.status = 403;
+    return { message: "User approval pending" };
+  }
+
+  if (u.approval_status === "rejected") {
+    set.status = 403;
+    return { message: "User registration rejected" };
+  }
 
   if (!u.is_active) {
     set.status = 403;
@@ -92,7 +236,7 @@ export async function getMe({ request, set }: any) {
 
     const dbUserRes = await db.query(
       `
-      SELECT id, username, role, department_id, is_active, title, first_name, last_name, profile_image_url, created_at, updated_at
+      SELECT id, username, role, department_id, is_active, approval_status, title, first_name, last_name, profile_image_url, created_at, updated_at
       FROM users
       WHERE id = $1
       LIMIT 1
@@ -106,6 +250,16 @@ export async function getMe({ request, set }: any) {
     }
 
     const u = dbUserRes.rows[0];
+    if (u.approval_status === "pending") {
+      set.status = 403;
+      return { message: "User approval pending" };
+    }
+
+    if (u.approval_status === "rejected") {
+      set.status = 403;
+      return { message: "User registration rejected" };
+    }
+
     if (!u.is_active) {
       set.status = 403;
       return { message: "User is inactive" };

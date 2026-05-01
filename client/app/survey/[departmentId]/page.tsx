@@ -191,6 +191,25 @@ export default function SurveyDepartmentPage({
     });
   }, [answers, department, group, hasQuestions, questions, token]);
 
+  const totalQuestions = questions.length;
+  const answeredQuestionCount = useMemo(() => {
+    return questions.reduce((total, question) => {
+      const answer = answers[question.id];
+      if (!answer) return total;
+
+      if (question.type === "rating") {
+        return typeof answer.rating === "number" ? total + 1 : total;
+      }
+
+      return answer.comment?.trim() ? total + 1 : total;
+    }, 0);
+  }, [answers, questions]);
+  const progressPercent =
+    totalQuestions > 0
+      ? Math.round((answeredQuestionCount / totalQuestions) * 100)
+      : 0;
+  const progressText = `ตอบแบบประเมินแล้ว ${answeredQuestionCount}/${totalQuestions} ข้อ`;
+
   const surveyYearLabel =
     survey?.year_be && Number.isFinite(survey.year_be)
       ? `ปีการศึกษา ${survey.year_be}`
@@ -339,9 +358,28 @@ export default function SurveyDepartmentPage({
         </section>
 
         {hasQuestions ? (
+          <section className="rounded-[28px] border border-sky-100/80 bg-white/90 p-5 shadow-[0_16px_40px_rgba(37,99,235,0.08)] backdrop-blur-sm sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="mt-1 text-base font-semibold text-slate-900 sm:text-xl">{progressText}</h2>
+              </div>
+              <div className="inline-flex items-center rounded-full border border-sky-100 bg-sky-50 px-3 py-1.5 text-sm font-semibold text-sky-700">
+                ทั้งหมด {totalQuestions} ข้อ
+              </div>
+            </div>
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </section>
+        ) : null}
+
+        {hasQuestions ? (
           <section className="rounded-[28px] border border-sky-100/80 bg-white/90 p-6 shadow-[0_16px_40px_rgba(37,99,235,0.08)] backdrop-blur-sm sm:p-7">
             <div className="max-w-xl">
-              <h2 className="mt-2 text-xl font-semibold text-slate-900">เลือกกลุ่มผู้ประเมิน</h2>
+              <h2 className="mt-2 text-base font-semibold text-slate-900 sm:text-xl">เลือกกลุ่มผู้ประเมิน</h2>
               <select
                 className={`mt-4 w-full rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3 text-sm shadow-sm outline-none transition hover:border-sky-200 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-100 ${
                   group ? "text-slate-800" : "text-slate-500"
@@ -365,13 +403,13 @@ export default function SurveyDepartmentPage({
                 key={question.id}
                 className="rounded-[28px] border border-sky-100/80 bg-white/95 p-5 shadow-[0_16px_36px_rgba(37,99,235,0.07)] backdrop-blur-sm"
               >
-                <div className="flex items-start gap-4">
-                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(37,99,235,0.22)] ring-1 ring-sky-200/60">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="mt-0.5 flex h-8 min-w-8 flex-shrink-0 items-center justify-center rounded-full border border-sky-200 bg-sky-50 px-2 text-sm font-semibold text-sky-700 shadow-sm sm:h-9 sm:min-w-9">
                     {index + 1}
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-lg font-semibold leading-7 text-slate-900">{question.text}</h3>
+                    <h3 className="text-[15px] font-semibold leading-6 text-slate-900 sm:text-lg sm:leading-7">{question.text}</h3>
                   </div>
                 </div>
 

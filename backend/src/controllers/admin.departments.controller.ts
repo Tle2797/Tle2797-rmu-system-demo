@@ -48,6 +48,31 @@ async function getDepartmentDependencies(
   return res.rows[0] ?? null;
 }
 
+async function findDepartmentByName(
+  client: Pick<typeof db, "query">,
+  name: string,
+  excludeId?: number,
+) {
+  const values: Array<string | number> = [name];
+  const excludeClause =
+    excludeId === undefined
+      ? ""
+      : `AND id <> $${values.push(excludeId)}`;
+
+  const res = await client.query(
+    `
+    SELECT id
+    FROM departments
+    WHERE lower(trim(name)) = lower(trim($1))
+      ${excludeClause}
+    LIMIT 1
+    `,
+    values,
+  );
+
+  return res.rows[0] ?? null;
+}
+
 export async function listAdminDepartments({ query }: any) {
   const includeQr = query.include_qr === "1";
 
@@ -97,6 +122,13 @@ export async function createAdminDepartment({ body, set }: any) {
 
   try {
     await client.query("BEGIN");
+
+    const duplicateDepartment = await findDepartmentByName(client, name);
+    if (duplicateDepartment) {
+      await client.query("ROLLBACK");
+      set.status = 409;
+      return { message: "มีชื่อหน่วยงานนี้อยู่ในระบบแล้ว" };
+    }
 
     const ins = await client.query(
       `
@@ -156,6 +188,12 @@ export async function updateAdminDepartment({ params, body, set }: any) {
   if (!name) {
     set.status = 400;
     return { message: "Name is required" };
+  }
+
+  const duplicateDepartment = await findDepartmentByName(db, name, id);
+  if (duplicateDepartment) {
+    set.status = 409;
+    return { message: "มีชื่อหน่วยงานนี้อยู่ในระบบแล้ว" };
   }
 
   const upd = await db.query(

@@ -65,6 +65,10 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function normalizeDepartmentName(value: string) {
+  return value.trim().toLowerCase();
+}
+
 function isDepartmentDeleteResponse(value: unknown): value is DepartmentDeleteResponse {
   return typeof value === "object" && value !== null && "message" in value;
 }
@@ -454,6 +458,21 @@ export default function AdminDepartmentsPage() {
       const trimmedName = name.trim();
       if (!trimmedName) {
         await showErrorAlert("บันทึกไม่สำเร็จ", "กรุณากรอกชื่อหน่วยงาน");
+        return;
+      }
+
+      const normalizedName = normalizeDepartmentName(trimmedName);
+      const duplicateDepartment = items.find(
+        (item) =>
+          normalizeDepartmentName(item.name) === normalizedName &&
+          (mode === "create" || item.id !== editing?.id),
+      );
+
+      if (duplicateDepartment) {
+        await showErrorAlert(
+          "บันทึกไม่สำเร็จ",
+          "มีชื่อหน่วยงานนี้อยู่ในระบบแล้ว",
+        );
         return;
       }
 
