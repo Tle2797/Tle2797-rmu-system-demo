@@ -148,14 +148,6 @@ export const SIDEBAR_MENU: Record<Role, SidebarItem[]> = {
       icon: ClipboardList,
     },
     {
-      label: "คำถามส่วนกลาง",
-      path: "/dashboard/questions/central",
-      matchPaths: ["/dashboard/questions/central"],
-      group: "questions",
-      appendDepartmentId: false,
-      icon: ListChecks,
-    },
-    {
       label: "สรุปข้อมูลรายปี",
       path: "/dashboard/yearly",
       matchPaths: ["/dashboard/yearly"],
@@ -195,14 +187,6 @@ export const SIDEBAR_MENU: Record<Role, SidebarItem[]> = {
       group: "questions",
       excludePaths: ["/dashboard/questions/central"],
       icon: ClipboardList,
-    },
-    {
-      label: "คำถามส่วนกลาง",
-      path: "/dashboard/questions/central",
-      matchPaths: ["/dashboard/questions/central"],
-      group: "questions",
-      appendDepartmentId: false,
-      icon: ListChecks,
     },
     {
       label: "สรุปข้อมูลรายปี",

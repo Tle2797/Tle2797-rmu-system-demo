@@ -2,22 +2,14 @@
 
 import { useEffect, useState, type ComponentType, type SVGProps } from "react";
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  LabelList,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
   CircleAlert,
   Building2,
   ClipboardList,
   Clock3,
+  PieChart,
   RefreshCw,
   Users,
+  X,
 } from "lucide-react";
 import { apiGet } from "@/lib/api";
 
@@ -50,11 +42,12 @@ type Stats = {
     department_name: string;
     survey_title: string;
   }>;
-  top_departments: Array<{
+  no_data_departments: Array<{
     id: number;
     name: string;
-    response_count: number;
+    total_responses: number;
     avg_rating: number | null;
+    issue_code: "no_data";
   }>;
   daily_trend: Array<{ day: string; count: number }>;
   rating_bands: RatingBand[];
@@ -87,42 +80,6 @@ function resolveLabel(avg: number | null, bands: RatingBand[]): string {
   // fallback: หาช่วงที่ใกล้ที่สุด
   const byMax = [...ordered].sort((a, b) => toNumLoose(a.max_value) - toNumLoose(b.max_value));
   return byMax.find((b) => v <= toNumLoose(b.max_value))?.label_th ?? "ไม่ทราบเกณฑ์";
-}
-
-/**
- * กำหนดสีตาม band ที่ได้รับจาก DB โดยอิง sort_order
- * sort_order ต่ำ = แย่, sort_order สูง = ดี
- */
-function resolveBandStyle(avg: number | null, bands: RatingBand[]): {
-  textClass: string;
-  bgClass: string;
-} {
-  if (!avg || !Number.isFinite(avg) || bands.length === 0) {
-    return { textClass: "text-sky-500", bgClass: "bg-sky-50 text-sky-700 border-sky-200" };
-  }
-
-  const clamped = Math.max(0, Math.min(5, avg));
-  const v = Number(clamped.toFixed(1));
-  const ordered = [...bands].sort((a, b) => Number(a.sort_order) - Number(b.sort_order));
-  const maxOrder = Math.max(...ordered.map((b) => Number(b.sort_order)));
-  const minOrder = Math.min(...ordered.map((b) => Number(b.sort_order)));
-
-  const found = ordered.find((b) => {
-    const min = toNumLoose(b.min_value);
-    const max = toNumLoose(b.max_value);
-    return Number.isFinite(min) && Number.isFinite(max) && v >= min && v <= max;
-  });
-
-  if (!found) return { textClass: "text-sky-500", bgClass: "bg-sky-50 text-sky-700 border-sky-200" };
-
-  const so = Number(found.sort_order);
-  const total = maxOrder - minOrder || 1;
-  const pct = (so - minOrder) / total; // 0 = worst, 1 = best
-
-  if (pct >= 0.75) return { textClass: "text-emerald-600", bgClass: "bg-emerald-50 text-emerald-700 border-emerald-200" };
-  if (pct >= 0.5) return { textClass: "text-blue-600", bgClass: "bg-blue-50 text-blue-700 border-blue-200" };
-  if (pct >= 0.25) return { textClass: "text-yellow-600", bgClass: "bg-yellow-50 text-yellow-700 border-yellow-200" };
-  return { textClass: "text-red-600", bgClass: "bg-red-50 text-red-700 border-red-200" };
 }
 
 const groupLabel: Record<string, string> = {
@@ -235,30 +192,6 @@ type TrendChartPoint = {
   isToday: boolean;
 };
 
-type ResponseChartSegment = {
-  name: string;
-  value: number;
-  color: string;
-};
-
-type TopDepartmentChartPoint = {
-  rank: number;
-  name: string;
-  responseCount: number;
-  sharePercent: number;
-  avgRating: number | null;
-  ratingLabel: string;
-  ratingClass: string;
-  fill: string;
-};
-
-type TopDepartmentsTooltipProps = {
-  active?: boolean;
-  payload?: Array<{
-    payload: TopDepartmentChartPoint;
-  }>;
-};
-
 function MiniBarChart({ data }: { data: Array<{ day: string; count: number }> }) {
   const chartData: TrendChartPoint[] = data.map((d, i) => ({
     day: d.day,
@@ -299,226 +232,13 @@ function MiniBarChart({ data }: { data: Array<{ day: string; count: number }> })
   );
 }
 
-function DonutChart({
-  student,
-  staff,
-  pub,
-  total,
-}: {
-  student: number;
-  staff: number;
-  pub: number;
-  total: number;
-}) {
-  const chartData: ResponseChartSegment[] = [
-    { name: "นักศึกษา", value: student, color: "#0ea5e9" },
-    { name: "บุคลากร", value: staff, color: "#10b981" },
-    { name: "บุคคลทั่วไป", value: pub, color: "#2563eb" },
-  ];
-
-  if (total <= 0) {
-    return <div className="flex h-72 items-center justify-center text-sm text-slate-400">ยังไม่มีข้อมูลการตอบแบบสอบถาม</div>;
-  }
-
-  const studentPct = (student / total) * 100;
-  const staffPct = (staff / total) * 100;
-  const pubPct = Math.max(0, 100 - studentPct - staffPct);
-
-  const ringStyle = {
-    background: `conic-gradient(#0ea5e9 0 ${studentPct}%, #10b981 ${studentPct}% ${
-      studentPct + staffPct
-    }%, #2563eb ${studentPct + staffPct}% 100%)`,
-  };
-
-  return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(280px,300px)_minmax(0,1fr)] lg:items-center">
-      <div className="flex items-center justify-center">
-        <div className="relative aspect-square w-full max-w-[18rem]">
-          <div
-            className="absolute inset-0 rounded-full shadow-[0_18px_35px_rgba(37,99,235,0.14)]"
-            style={ringStyle}
-          />
-          <div className="absolute inset-[18px] rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(148,163,184,0.10)]" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-3xl font-black tabular-nums text-slate-900">
-                {total.toLocaleString("th-TH")}
-              </div>
-              <div className="text-xs font-medium text-slate-500">การตอบทั้งหมด</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-2.5 text-sm">
-        {chartData.map((x) => (
-          <div
-            key={x.name}
-            className="flex items-center gap-2 rounded-xl border border-sky-100 bg-sky-50/60 px-3 py-2.5"
-          >
-            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: x.color }} />
-            <span className="text-slate-600">{x.name}</span>
-            <span className="ml-auto min-w-[4rem] text-right tabular-nums font-semibold text-slate-900">
-              {x.value.toLocaleString("th-TH")}
-            </span>
-          </div>
-        ))}
-
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs text-slate-500">
-          <div className="rounded-xl border border-sky-100 bg-white px-2 py-2">
-            <div className="tabular-nums font-semibold text-slate-900">{studentPct.toFixed(1)}%</div>
-            <div>นักศึกษา</div>
-          </div>
-          <div className="rounded-xl border border-sky-100 bg-white px-2 py-2">
-            <div className="tabular-nums font-semibold text-slate-900">{staffPct.toFixed(1)}%</div>
-            <div>บุคลากร</div>
-          </div>
-          <div className="rounded-xl border border-sky-100 bg-white px-2 py-2">
-            <div className="tabular-nums font-semibold text-slate-900">{pubPct.toFixed(1)}%</div>
-            <div>ทั่วไป</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TopDepartmentsTooltip({ active, payload }: TopDepartmentsTooltipProps) {
-  if (!active || !payload?.length) return null;
-
-  const point = payload[0].payload;
-
-  return (
-    <div className="rounded-2xl border border-sky-100 bg-white px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.12)]">
-      <div className="flex items-center gap-2">
-        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: point.fill }} />
-        <div className="max-w-[220px] truncate text-sm font-semibold text-slate-900">
-          {point.name}
-        </div>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between gap-6 text-xs text-slate-500">
-        <span>อันดับ</span>
-        <span className="font-semibold text-slate-900">#{point.rank}</span>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between gap-6 text-xs text-slate-500">
-        <span>จำนวนการตอบ</span>
-        <span className="font-semibold text-slate-900">
-          {point.responseCount.toLocaleString("th-TH")}
-        </span>
-      </div>
-
-      <div className="mt-1 flex items-center justify-between gap-6 text-xs text-slate-500">
-        <span>สัดส่วนต่อทั้งหมด</span>
-        <span className="font-semibold text-slate-900">
-          {point.sharePercent.toFixed(1)}%
-        </span>
-      </div>
-
-      <div className="mt-1 flex items-center justify-between gap-6 text-xs text-slate-500">
-        <span>คะแนนเฉลี่ย</span>
-        <span
-          className={`rounded-full border px-2 py-0.5 font-medium ${point.ratingClass}`}
-        >
-          {point.avgRating !== null
-            ? `${point.ratingLabel} (${point.avgRating.toFixed(2)})`
-            : "ยังไม่มีข้อมูล"}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function TopDepartmentsChart({
-  data,
-}: {
-  data: TopDepartmentChartPoint[];
-}) {
-  if (data.length === 0) {
-    return (
-      <div className="flex h-[320px] items-center justify-center rounded-2xl border border-sky-100/80 bg-gradient-to-b from-sky-50/70 to-white text-sm text-slate-400">
-        ยังไม่มีข้อมูล
-      </div>
-    );
-  }
-
-  const formatCategoryLabel = (value: string) =>
-    value.length > 22 ? `${value.slice(0, 22)}…` : value;
-
-  return (
-    <div className="rounded-2xl border border-sky-100/80 bg-gradient-to-b from-sky-50/60 via-white to-white p-3">
-      <div className="h-[320px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            layout="vertical"
-            margin={{ top: 8, right: 34, left: 12, bottom: 8 }}
-            barCategoryGap="26%"
-          >
-            <CartesianGrid
-              strokeDasharray="3 3"
-              horizontal={false}
-              stroke="#dbeafe"
-            />
-
-            <XAxis
-              type="number"
-              tickLine={false}
-              axisLine={false}
-              allowDecimals={false}
-              tick={{ fontSize: 11, fill: "#64748b" }}
-            />
-
-            <YAxis
-              type="category"
-              dataKey="name"
-              width={170}
-              tickLine={false}
-              axisLine={false}
-              interval={0}
-              tickFormatter={formatCategoryLabel}
-              tick={{ fontSize: 12, fill: "#334155", fontWeight: 500 }}
-            />
-
-            <Tooltip
-              content={<TopDepartmentsTooltip />}
-              cursor={{ fill: "rgba(37,99,235,0.06)" }}
-            />
-
-            <Bar
-              dataKey="responseCount"
-              radius={[0, 10, 10, 0]}
-              barSize={18}
-              fill="#2563eb"
-            >
-              <LabelList
-                dataKey="responseCount"
-                position="right"
-                formatter={(value) => {
-                  const numeric = typeof value === "number" ? value : Number(value);
-                  return Number.isFinite(numeric)
-                    ? numeric.toLocaleString("th-TH")
-                    : "";
-                }}
-                fill="#0f172a"
-                fontSize={12}
-                fontWeight={700}
-              />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
 /* ======================== Main Page ======================== */
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshed, setRefreshed] = useState<Date | null>(null);
+  const [showNoDataDialog, setShowNoDataDialog] = useState(false);
 
   const load = async () => {
     try {
@@ -589,30 +309,20 @@ export default function AdminDashboardPage() {
     time_slots,
     responses,
     recent_responses,
-    top_departments,
+    no_data_departments,
     daily_trend,
     rating_bands,
   } = stats;
 
   // ใช้ rating_bands จาก DB แทน hardcode
   const avgRating = responses.avg_rating ? Number(responses.avg_rating) : null;
-  const topDepartmentChartData: TopDepartmentChartPoint[] = [...top_departments]
-    .sort((a, b) => b.response_count - a.response_count)
-    .map((d, index) => {
-      const avg = d.avg_rating ? Number(d.avg_rating) : null;
-      const { bgClass: ratingClass } = resolveBandStyle(avg, rating_bands);
-
-      return {
-        rank: index + 1,
-        name: d.name,
-        responseCount: d.response_count,
-        sharePercent: responses.total > 0 ? (d.response_count / responses.total) * 100 : 0,
-        avgRating: avg,
-        ratingLabel: resolveLabel(avg, rating_bands),
-        ratingClass,
-        fill: "#2563eb",
-      };
-    });
+  const noDataPreview = no_data_departments.slice(0, 5);
+  const totalResponses = Math.max(responses.total, 1);
+  const respondentSegments = [
+    { label: "นักศึกษา", value: responses.student, color: "#0ea5e9" },
+    { label: "บุคลากร", value: responses.staff, color: "#10b981" },
+    { label: "บุคคลทั่วไป", value: responses.public, color: "#2563eb" },
+  ];
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-br from-sky-50 via-white to-blue-50 p-6 text-slate-900">
@@ -712,77 +422,38 @@ export default function AdminDashboardPage() {
             <MiniBarChart data={daily_trend} />
           </div>
 
-          <div className="rounded-2xl border border-sky-100/80 bg-white/90 p-5 shadow-[0_16px_40px_rgba(37,99,235,0.08)] backdrop-blur-sm">
-            <h2 className="mb-3 font-bold text-slate-900  "> สัดส่วนผู้ทำแบบสอบถาม</h2>
-            {responses.total > 0 ? (
-              <DonutChart
-                student={responses.student}
-                staff={responses.staff}
-                pub={responses.public}
-                total={responses.total}
-              />
-            ) : (
-              <div className="flex h-36 items-center justify-center text-sm text-slate-400">
-                ยังไม่มีข้อมูลการตอบแบบสอบถาม
+          <section className="rounded-2xl border border-sky-100/80 bg-white/90 p-5 shadow-[0_16px_40px_rgba(37,99,235,0.08)]">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-sky-500 text-white shadow-[0_10px_22px_rgba(14,165,233,0.18)]">
+                <PieChart className="h-5 w-5" />
               </div>
-            )}
-          </div>
+              <h2 className="font-bold text-slate-900">สัดส่วนผู้ตอบตามกลุ่ม</h2>
+            </div>
+            <div className="mt-5 space-y-3">
+              {respondentSegments.map((segment) => {
+                const pct = (segment.value / totalResponses) * 100;
+                return (
+                  <div key={segment.label} className="rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: segment.color }} />
+                        <span className="text-slate-700">{segment.label}</span>
+                      </div>
+                      <span className="font-semibold text-slate-900">{segment.value.toLocaleString("th-TH")} คน</span>
+                    </div>
+                    <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
+                      <div className="h-3 rounded-full" style={{ width: `${pct}%`, backgroundColor: segment.color }} />
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">{pct.toFixed(1)}% ของผู้ตอบทั้งหมด</div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         </div>
 
         {/* Bottom Row */}
         <div className="grid gap-4 md:grid-cols-2">
-          {/* Top departments */}
-          <div className="rounded-2xl border border-sky-100/80 bg-white/90 p-5 shadow-[0_16px_40px_rgba(37,99,235,0.08)] backdrop-blur-sm">
-            <div className="mb-3">
-              <h2 className="font-bold text-slate-900">กราฟ 5 อันดับหน่วยงานที่มีการตอบมากที่สุด</h2>
-            </div>
-            <TopDepartmentsChart data={topDepartmentChartData} />
-            {top_departments.length === 0 ? (
-              <div className="hidden py-8 text-center text-sm text-slate-400">ยังไม่มีข้อมูล</div>
-            ) : (
-              <div className="hidden space-y-2">
-                {top_departments.map((d, idx) => {
-                  const maxCount = top_departments[0].response_count || 1;
-                  const pct = (d.response_count / maxCount) * 100;
-                  const dAvg = d.avg_rating ? Number(d.avg_rating) : null;
-                  const { bgClass: dBgClass } = resolveBandStyle(dAvg, rating_bands);
-                  const dLabel = resolveLabel(dAvg, rating_bands);
-                  return (
-                    <div key={d.id} className="space-y-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-semibold text-sky-700">
-                            {idx + 1}
-                          </span>
-                          <span className="truncate font-medium text-slate-800">{d.name}</span>
-                        </div>
-                        <div className="flex flex-shrink-0 items-center gap-2">
-                          {dAvg !== null && (
-                            <span
-                              className={`rounded border px-1.5 py-0.5 text-xs font-medium ${dBgClass}`}
-                              title={dLabel}
-                            >
-                            </span>
-                          )}
-                          <span className="w-10 text-right text-xs text-slate-600">
-                            {d.response_count}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="h-1.5 w-full rounded-full bg-sky-100">
-                        <div
-                          className="h-1.5 rounded-full bg-gradient-to-r from-sky-500 to-blue-500 transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Recent responses */}
           <div className="rounded-2xl border border-sky-100/80 bg-white/90 p-5 shadow-[0_16px_40px_rgba(37,99,235,0.08)] backdrop-blur-sm">
             <h2 className="mb-3 font-bold text-slate-900"> การตอบแบบสอบถามล่าสุด</h2>
             {recent_responses.length === 0 ? (
@@ -816,8 +487,109 @@ export default function AdminDashboardPage() {
               </div>
             )}
           </div>
+
+          <div className="rounded-2xl border border-sky-100/80 bg-white/90 p-5 shadow-[0_16px_40px_rgba(37,99,235,0.08)] backdrop-blur-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-orange-500 text-white shadow-[0_10px_22px_rgba(244,63,94,0.18)]">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-slate-900">หน่วยงานที่ยังไม่มีข้อมูล</h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    ทั้งหมด {no_data_departments.length.toLocaleString("th-TH")} หน่วยงาน
+                  </p>
+                </div>
+              </div>
+              {no_data_departments.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowNoDataDialog(true)}
+                  className="rounded-xl border border-sky-200 bg-sky-50 px-3.5 py-2 text-sm font-medium text-sky-700 transition hover:border-sky-300 hover:bg-sky-100 focus:outline-none focus:ring-4 focus:ring-sky-100"
+                >
+                  ดูทั้งหมด
+                </button>
+              ) : null}
+            </div>
+            <div className="mt-4 space-y-3">
+              {noDataPreview.length === 0 ? (
+                <div className="rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-8 text-center text-sm text-slate-400">
+                  ทุกหน่วยงานมีข้อมูลแล้ว
+                </div>
+              ) : (
+                noDataPreview.map((department) => (
+                  <div
+                    key={department.id}
+                    className="rounded-2xl border border-sky-100 bg-gradient-to-r from-white to-sky-50/60 p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-slate-900">
+                          {department.name}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">ยังไม่มีผู้ตอบ</div>
+                      </div>
+                      <span className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
+                        ยังไม่มีข้อมูล
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
+      {showNoDataDialog ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="no-data-dialog-title"
+          onClick={() => setShowNoDataDialog(false)}
+        >
+          <div
+            className="w-full max-w-2xl overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.24)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-sky-100 px-5 py-4">
+              <div>
+                <h3 id="no-data-dialog-title" className="text-lg font-bold text-slate-900">
+                  หน่วยงานที่ยังไม่มีข้อมูล
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  พบทั้งหมด {no_data_departments.length.toLocaleString("th-TH")} หน่วยงาน
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNoDataDialog(false)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-sky-50 hover:text-slate-900"
+                aria-label="ปิด"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="max-h-[65vh] overflow-y-auto p-5">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {no_data_departments.map((department, index) => (
+                  <div
+                    key={department.id}
+                    className="flex items-center gap-3 rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5"
+                  >
+                    <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-sky-700">
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 truncate text-sm font-medium text-slate-800">
+                      {department.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

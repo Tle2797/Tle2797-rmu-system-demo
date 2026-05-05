@@ -93,6 +93,19 @@ export async function listDashboardQuestions({ params, request, set }: any) {
   }
 
   const surveyId = survey.id;
+  const centralSettingRes = await db.query(
+    `
+    SELECT EXISTS (
+      SELECT 1
+      FROM department_central_question_settings
+      WHERE department_id = $1
+        AND survey_id = $2
+        AND enabled = true
+    ) AS central_enabled
+    `,
+    [departmentId, surveyId],
+  );
+  const centralEnabled = Boolean(centralSettingRes.rows[0]?.central_enabled);
 
   const result = await db.query(
     `
@@ -105,11 +118,17 @@ export async function listDashboardQuestions({ params, request, set }: any) {
       q.status,
       q.display_order,
       q.department_id,
+      ($3::boolean AND q.scope = 'central') AS is_selected,
       COUNT(a.id)::int AS answer_count,
       COUNT(DISTINCT a.response_id)::int AS response_count,
       (COUNT(a.id) > 0) AS has_answers
     FROM questions q
-    LEFT JOIN answers a ON a.question_id = q.id
+    LEFT JOIN responses r
+      ON r.survey_id = q.survey_id
+     AND r.department_id = $2
+    LEFT JOIN answers a
+      ON a.response_id = r.id
+     AND a.question_id = q.id
     WHERE q.survey_id = $1
       AND (
         q.scope = 'central'
@@ -133,7 +152,7 @@ export async function listDashboardQuestions({ params, request, set }: any) {
       q.display_order ASC NULLS LAST,
       q.id ASC
     `,
-    [surveyId, departmentId],
+    [surveyId, departmentId, centralEnabled],
   );
 
   return {
@@ -144,6 +163,116 @@ export async function listDashboardQuestions({ params, request, set }: any) {
       year_be: survey.year_be,
       title: survey.title,
     },
+    central_enabled: centralEnabled,
+  };
+}
+
+export async function updateDepartmentCentralQuestions({
+  params,
+  body,
+  request,
+  set,
+}: any) {
+  const departmentId = Number(params.departmentId);
+  if (!Number.isFinite(departmentId) || departmentId <= 0) {
+    set.status = 400;
+    return { message: "Invalid departmentId" };
+  }
+
+  if (!(await ensureDepartmentAccess(request, departmentId, set))) {
+    return { message: "Forbidden: cannot access this department" };
+  }
+
+  const survey = await getActiveSurvey();
+  if (!survey) {
+    set.status = 409;
+    return { message: "No active survey" };
+  }
+
+  const questionIdsRaw = Array.isArray(body?.question_ids)
+    ? body.question_ids
+    : [];
+  const questionIds = Array.from(
+    new Set(
+      questionIdsRaw
+        .map((value: unknown) => Number(value))
+        .filter((value: number) => Number.isInteger(value) && value > 0),
+    ),
+  );
+
+  if (questionIdsRaw.length !== questionIds.length) {
+    set.status = 400;
+    return { message: "Invalid question_ids" };
+  }
+
+  if (questionIds.length > 0) {
+    const validRes = await db.query(
+      `
+      SELECT id
+      FROM questions
+      WHERE survey_id = $1
+        AND scope = 'central'
+        AND id = ANY($2::bigint[])
+      `,
+      [survey.id, questionIds],
+    );
+
+    if ((validRes.rowCount ?? 0) !== questionIds.length) {
+      set.status = 400;
+      return { message: "Some central questions are invalid" };
+    }
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query(
+      `
+      DELETE FROM department_central_questions dcq
+      USING questions q
+      WHERE dcq.question_id = q.id
+        AND dcq.department_id = $1
+        AND q.survey_id = $2
+        AND q.scope = 'central'
+      `,
+      [departmentId, survey.id],
+    );
+
+    for (const questionId of questionIds) {
+      await client.query(
+        `
+        INSERT INTO department_central_questions (department_id, question_id)
+        VALUES ($1, $2)
+        ON CONFLICT (department_id, question_id) DO NOTHING
+        `,
+        [departmentId, questionId],
+      );
+    }
+
+    await client.query(
+      `
+      INSERT INTO department_central_question_settings
+        (department_id, survey_id, enabled, updated_at)
+      VALUES
+        ($1, $2, $3, now())
+      ON CONFLICT (department_id, survey_id)
+      DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = now()
+      `,
+      [departmentId, survey.id, questionIds.length > 0],
+    );
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  return {
+    message: "Updated central questions",
+    selected_question_ids: questionIds,
   };
 }
 

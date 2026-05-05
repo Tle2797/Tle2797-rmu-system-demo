@@ -4,6 +4,8 @@ import { authenticateRequest } from "../utils/auth";
 import { canAccessDepartment } from "../utils/authorization";
 import { getActiveSurvey } from "../utils/surveys";
 
+const REPORT_TIMEZONE = "Asia/Bangkok";
+
 async function ensureDepartmentAccess(
   request: Request,
   departmentId: number,
@@ -37,70 +39,123 @@ export async function getDepartmentSummary({ params, request, set }: any) {
     return { message: "No active survey" };
   }
 
-  const kpiRes = await db.query(
-    `
-    SELECT
-      COUNT(*)::int AS total,
-      COUNT(*) FILTER (WHERE respondent_group = 'student')::int AS student,
-      COUNT(*) FILTER (WHERE respondent_group = 'staff')::int AS staff,
-      COUNT(*) FILTER (WHERE respondent_group = 'public')::int AS public
-    FROM responses
-    WHERE survey_id = $1
-      AND department_id = $2
-    `,
-    [survey.id, departmentId],
-  );
-
-  const ratingRes = await db.query(
-    `
-    SELECT
-      q.id AS question_id,
-      q.text AS question_text,
-      q.type AS question_type,
-      COUNT(a.rating)::int AS n,
-      CASE
-        WHEN q.type = 'rating' THEN ROUND(AVG(a.rating)::numeric, 2)
-        ELSE NULL
-      END AS avg,
-      CASE
-        WHEN q.type = 'rating' THEN ROUND(stddev_samp(a.rating)::numeric, 2)
-        ELSE NULL
-      END AS sd,
-      COUNT(*) FILTER (WHERE a.rating = 1)::int AS r1,
-      COUNT(*) FILTER (WHERE a.rating = 2)::int AS r2,
-      COUNT(*) FILTER (WHERE a.rating = 3)::int AS r3,
-      COUNT(*) FILTER (WHERE a.rating = 4)::int AS r4,
-      COUNT(*) FILTER (WHERE a.rating = 5)::int AS r5
-    FROM questions q
-    LEFT JOIN responses r
-      ON r.survey_id = q.survey_id
-     AND r.department_id = $2
-    LEFT JOIN answers a
-      ON a.response_id = r.id
-     AND a.question_id = q.id
-    WHERE q.survey_id = $1
-      AND q.status = 'active'
-      AND (
-        q.scope = 'central'
-        OR (q.scope = 'department' AND q.department_id = $2)
+  const [kpiRes, ratingRes, recentRes, dailyTrendRes, bandsRes] = await Promise.all([
+    db.query(
+      `
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE respondent_group = 'student')::int AS student,
+        COUNT(*) FILTER (WHERE respondent_group = 'staff')::int AS staff,
+        COUNT(*) FILTER (WHERE respondent_group = 'public')::int AS public
+      FROM responses
+      WHERE survey_id = $1
+        AND department_id = $2
+      `,
+      [survey.id, departmentId],
+    ),
+    db.query(
+      `
+      SELECT
+        q.id AS question_id,
+        q.text AS question_text,
+        q.type AS question_type,
+        COUNT(a.rating)::int AS n,
+        CASE
+          WHEN q.type = 'rating' THEN ROUND(AVG(a.rating)::numeric, 2)
+          ELSE NULL
+        END AS avg,
+        CASE
+          WHEN q.type = 'rating' THEN ROUND(stddev_samp(a.rating)::numeric, 2)
+          ELSE NULL
+        END AS sd,
+        COUNT(*) FILTER (WHERE a.rating = 1)::int AS r1,
+        COUNT(*) FILTER (WHERE a.rating = 2)::int AS r2,
+        COUNT(*) FILTER (WHERE a.rating = 3)::int AS r3,
+        COUNT(*) FILTER (WHERE a.rating = 4)::int AS r4,
+        COUNT(*) FILTER (WHERE a.rating = 5)::int AS r5
+      FROM questions q
+      LEFT JOIN responses r
+        ON r.survey_id = q.survey_id
+       AND r.department_id = $2
+      LEFT JOIN answers a
+        ON a.response_id = r.id
+       AND a.question_id = q.id
+      WHERE q.survey_id = $1
+        AND q.status = 'active'
+        AND (
+          (
+            q.scope = 'central'
+            AND EXISTS (
+              SELECT 1
+              FROM department_central_question_settings dcqs
+              WHERE dcqs.department_id = $2
+                AND dcqs.survey_id = $1
+                AND dcqs.enabled = true
+            )
+          )
+          OR (q.scope = 'department' AND q.department_id = $2)
+        )
+      GROUP BY q.id, q.text, q.type
+      ORDER BY q.display_order ASC, q.id ASC
+      `,
+      [survey.id, departmentId],
+    ),
+    db.query(
+      `
+      SELECT
+        r.id,
+        r.respondent_group,
+        r.submitted_at
+      FROM responses r
+      WHERE r.survey_id = $1
+        AND r.department_id = $2
+      ORDER BY r.submitted_at DESC
+      LIMIT 5
+      `,
+      [survey.id, departmentId],
+    ),
+    db.query(
+      `
+      WITH department_responses AS (
+        SELECT
+          r.id,
+          (timezone('${REPORT_TIMEZONE}', r.submitted_at))::date AS submitted_date_local
+        FROM responses r
+        WHERE r.survey_id = $1
+          AND r.department_id = $2
+      ),
+      date_series AS (
+        SELECT generate_series(
+          (timezone('${REPORT_TIMEZONE}', now()))::date - 6,
+          (timezone('${REPORT_TIMEZONE}', now()))::date,
+          '1 day'::interval
+        )::date AS day
       )
-    GROUP BY q.id, q.text, q.type
-    ORDER BY q.display_order ASC, q.id ASC
-    `,
-    [survey.id, departmentId],
-  );
-
-  const bandsRes = await db.query(`
-    SELECT id, min_value, max_value, label_th, sort_order
-    FROM rating_bands
-    ORDER BY sort_order ASC, min_value ASC
-  `);
+      SELECT
+        ds.day,
+        COUNT(dr.id)::int AS count
+      FROM date_series ds
+      LEFT JOIN department_responses dr
+        ON dr.submitted_date_local = ds.day
+      GROUP BY ds.day
+      ORDER BY ds.day ASC
+      `,
+      [survey.id, departmentId],
+    ),
+    db.query(`
+      SELECT id, min_value, max_value, label_th, sort_order
+      FROM rating_bands
+      ORDER BY sort_order ASC, min_value ASC
+    `),
+  ]);
 
   return {
     survey: { id: survey.id, year_be: survey.year_be, title: survey.title },
     rating_bands: bandsRes.rows,
     kpi: kpiRes.rows[0],
     ratings: ratingRes.rows,
+    recent_responses: recentRes.rows,
+    daily_trend: dailyTrendRes.rows,
   };
 }
 

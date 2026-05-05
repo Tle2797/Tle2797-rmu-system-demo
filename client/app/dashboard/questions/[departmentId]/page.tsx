@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ComponentType, type CSSProperties, type SVGProps } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { CircleCheck, CircleX, Info, ListChecks, X } from "lucide-react";
+import { CheckSquare, CircleCheck, CircleX, Info, ListChecks, X } from "lucide-react";
 import Swal from "sweetalert2";
 import {
   apiDeleteWithMeta,
@@ -27,6 +27,7 @@ type QuestionRow = {
   answer_count: number;
   response_count: number;
   has_answers: boolean;
+  is_selected?: boolean;
 };
 
 type QuestionsResponse = {
@@ -230,6 +231,7 @@ export default function DepartmentQuestionsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [open, setOpen] = useState(false);
+  const [centralOpen, setCentralOpen] = useState(false);
   const [mode, setMode] = useState<ModalMode>("create");
   const [editing, setEditing] = useState<QuestionRow | null>(null);
   const [text, setText] = useState("");
@@ -284,7 +286,8 @@ export default function DepartmentQuestionsPage() {
         } catch {}
         const res = await apiGet<QuestionsResponse>(`/api/dashboard/questions/${effectiveDepartmentId}`);
         if (!active) return;
-        setItems(res.items ?? []);
+        const nextItems = res.items ?? [];
+        setItems(nextItems);
         setSurvey(res.survey ?? null);
         setHasActiveSurvey(true);
       } catch (e: unknown) {
@@ -311,9 +314,25 @@ export default function DepartmentQuestionsPage() {
     };
   }, [authReady, me, effectiveDepartmentId, reloadKey, isCentralView]);
 
+  const centralItems = useMemo(
+    () => items.filter((item) => item.scope === "central"),
+    [items],
+  );
+  const centralQuestionsEnabled = centralItems.some((item) => item.is_selected);
+
+  const selectedCentralItems = useMemo(
+    () => centralItems.filter((item) => item.is_selected),
+    [centralItems],
+  );
+
+  const departmentItems = useMemo(
+    () => items.filter((item) => item.scope === "department"),
+    [items],
+  );
+
   const visibleItems = useMemo(
-    () => items.filter((item) => (isCentralView ? item.scope === "central" : item.scope === "department")),
-    [items, isCentralView],
+    () => (isCentralView ? centralItems : [...selectedCentralItems, ...departmentItems]),
+    [centralItems, departmentItems, isCentralView, selectedCentralItems],
   );
 
   const counts = useMemo(() => {
@@ -383,6 +402,39 @@ export default function DepartmentQuestionsPage() {
     setText("");
     setQType("rating");
     setDisplayOrder(1);
+  };
+
+  const openCentralPicker = () => {
+    setCentralOpen(true);
+  };
+
+  const closeCentralPicker = () => {
+    setCentralOpen(false);
+  };
+
+  const saveCentralSelections = async () => {
+    try {
+      setError("");
+      if (!hasActiveSurvey) throw new Error("ไม่พบแบบสอบถามที่กำลังเปิดใช้งาน");
+      if (centralQuestionsEnabled) return;
+
+      setBusy(true);
+      const centralQuestionIds = centralItems.map((item) => item.id);
+      await apiPut(`/api/dashboard/questions/department/${effectiveDepartmentId}/central-selections`, {
+        question_ids: centralQuestionIds,
+      });
+
+      setCentralOpen(false);
+      setReloadKey((prev) => prev + 1);
+      await showSuccessAlert(
+        "เพิ่มคำถามกลางสำเร็จ",
+        `เพิ่มคำถามกลาง ${centralQuestionIds.length.toLocaleString("th-TH")} ข้อสำหรับหน่วยงานนี้เรียบร้อยแล้ว`,
+      );
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "เพิ่มคำถามกลางไม่สำเร็จ"));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const save = async () => {
@@ -604,7 +656,16 @@ export default function DepartmentQuestionsPage() {
         </div>
 
         {canManageQuestions && (
-          <div className="flex justify-end pr-4 sm:pr-4">
+          <div className="flex flex-wrap justify-end gap-2 pr-4 sm:pr-4">
+            <button
+              type="button"
+              onClick={openCentralPicker}
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-600 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:border-emerald-500 hover:bg-emerald-500 disabled:opacity-60"
+              disabled={busy || !hasActiveSurvey || (!centralQuestionsEnabled && centralItems.length === 0)}
+            >
+              <CheckSquare className="h-4 w-4" aria-hidden="true" />
+              {centralQuestionsEnabled ? "เพิ่มคำถามกลางแล้ว" : "เพิ่มคำถามกลาง"}
+            </button>
             <button type="button" onClick={openCreate} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-sky-500 hover:to-blue-500 disabled:opacity-60" disabled={busy || !hasActiveSurvey}>
               + เพิ่มคำถามหน่วยงาน
             </button>
@@ -627,11 +688,26 @@ export default function DepartmentQuestionsPage() {
                 {paginatedItems.length === 0 ? (
                   <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={canManageQuestions ? 5 : 4}>{emptyMessage}</td></tr>
                 ) : (
-                  paginatedItems.map((row) => (
+                  paginatedItems.map((row, index) => (
                     <tr key={row.id} className="transition hover:bg-slate-50">
-                      <td className="px-4 py-3 text-center text-slate-500">{row.display_order ?? "-"}</td>
+                      <td className="px-4 py-3 text-center text-slate-500">
+                        {(safeCurrentPage - 1) * PAGE_SIZE + index + 1}
+                      </td>
                       <td className="px-4 py-3 text-slate-900">
                         <div className="font-medium">{row.text}</div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${
+                              row.scope === "central"
+                                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                                : "border-sky-200 bg-sky-50 text-sky-700"
+                            }`}
+                          >
+                            {row.scope === "central"
+                              ? "คำถามกลาง"
+                              : "คำถามของหน่วยงาน"}
+                          </span>
+                        </div>
                         {row.has_answers && (
                           <div className="mt-1 text-xs text-amber-700">
                             มีข้อมูลการประเมินแล้ว {row.answer_count.toLocaleString("th-TH")} รายการ จากแบบประเมิน
@@ -642,12 +718,22 @@ export default function DepartmentQuestionsPage() {
                       <td className="px-4 py-3 text-center"><StatusBadge status={row.status} /></td>
                       {canManageQuestions && (
                         <td className="px-4 py-3 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <ToggleSwitch checked={row.status === "active"} onChange={() => toggleActive(row)} disabled={busy} title={row.status === "active" ? "คลิกเพื่อปิดใช้งานคำถาม" : "คลิกเพื่อเปิดใช้งานคำถาม"} />
-                            <div className="mx-1 h-5 w-px bg-slate-200" />
-                            <button type="button" onClick={() => openEdit(row)} className="rounded-xl border border-amber-500 bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-amber-600 hover:bg-amber-600 disabled:opacity-50" disabled={busy}>แก้ไข</button>
-                            <button type="button" onClick={() => deleteQuestion(row)} className="rounded-xl border border-red-500 bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-red-600 hover:bg-red-600 disabled:opacity-50" disabled={busy}>ลบ</button>
-                          </div>
+                          {row.scope === "department" ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <ToggleSwitch checked={row.status === "active"} onChange={() => toggleActive(row)} disabled={busy} title={row.status === "active" ? "คลิกเพื่อปิดใช้งานคำถาม" : "คลิกเพื่อเปิดใช้งานคำถาม"} />
+                              <div className="mx-1 h-5 w-px bg-slate-200" />
+                              <button type="button" onClick={() => openEdit(row)} className="rounded-xl border border-amber-500 bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-amber-600 hover:bg-amber-600 disabled:opacity-50" disabled={busy}>แก้ไข</button>
+                              <button type="button" onClick={() => deleteQuestion(row)} className="rounded-xl border border-red-500 bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-red-600 hover:bg-red-600 disabled:opacity-50" disabled={busy}>ลบ</button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="cursor-not-allowed rounded-xl border border-emerald-600 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white opacity-80"
+                              disabled
+                            >
+                              เพิ่มคำถามกลางแล้ว
+                            </button>
+                          )}
                         </td>
                       )}
                     </tr>
@@ -664,6 +750,109 @@ export default function DepartmentQuestionsPage() {
             </div>
           </div>
         </div>
+
+        {centralOpen && canManageQuestions && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4">
+            <div className="w-full max-w-3xl overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50 to-sky-50 shadow-[0_24px_70px_rgba(15,23,42,0.18)]">
+              <div className="relative rounded-t-3xl border-b border-white/15 bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 px-6 py-4 text-white">
+                <button
+                  type="button"
+                  onClick={closeCentralPicker}
+                  disabled={busy}
+                  className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25 disabled:opacity-60"
+                  aria-label="ปิด"
+                  title="ปิด"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <h3 className="text-lg font-bold">
+                  {centralQuestionsEnabled ? "เพิ่มคำถามกลางแล้ว" : "ยืนยันเพิ่มคำถามกลาง"}
+                </h3>
+                <p className="mt-1 text-sm text-sky-100/90">
+                  {centralQuestionsEnabled
+                    ? "หน่วยงานนี้เพิ่มคำถามกลางแล้ว คำถามกลางใหม่จะถูกนำมาใช้โดยอัตโนมัติ"
+                    : "ยืนยันการเพิ่มคำถามกลางไปใช้ในแบบประเมินของหน่วยงานนี้"}
+                </p>
+              </div>
+
+              <div className="p-6">
+                <div className="flex justify-end">
+                  <div className="rounded-2xl border border-blue-700/20 bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm">
+                    คำถามกลางทั้งหมด {centralItems.length.toLocaleString("th-TH")} ข้อ
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-white">
+                  <div className="max-h-[50vh] overflow-y-auto">
+                    {centralItems.length === 0 ? (
+                      <div className="px-4 py-10 text-center text-sm text-slate-500">
+                        ยังไม่มีคำถามกลางในแบบสอบถามที่เปิดใช้งาน
+                      </div>
+                    ) : (
+                      <table className="min-w-full text-sm">
+                        <thead className="sticky top-0 border-b border-blue-700/20 bg-gradient-to-r from-sky-600 to-blue-600 text-white">
+                          <tr>
+                            <th className="w-[90px] px-4 py-3 text-center font-semibold">
+                              ข้อ
+                            </th>
+                            <th className="min-w-[260px] px-4 py-3 text-left font-semibold">
+                              คำถาม
+                            </th>
+                            <th className="w-[170px] px-4 py-3 text-center font-semibold">
+                              รูปแบบคำถาม
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {centralItems.map((question) => (
+                            <tr key={question.id} className="transition hover:bg-slate-50">
+                              <td className="px-4 py-3 text-center font-medium text-slate-500">
+                                {question.display_order ?? "-"}
+                              </td>
+                              <td className="px-4 py-3 text-sm font-medium leading-6 text-slate-900">
+                                {question.text}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <TypeBadge type={question.type} />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    {error}
+                  </div>
+                )}
+
+                <div className="mt-6 flex justify-end gap-2">
+                  {!centralQuestionsEnabled && (
+                    <button
+                      type="button"
+                      onClick={saveCentralSelections}
+                      disabled={busy || centralItems.length === 0}
+                      className="rounded-xl bg-emerald-600 px-4 py-2 font-medium text-white transition hover:bg-emerald-500 disabled:opacity-60"
+                    >
+                      {busy ? "กำลังบันทึก..." : "ยืนยันเพิ่มคำถามกลาง"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={closeCentralPicker}
+                    disabled={busy}
+                    className="rounded-xl border border-slate-200 bg-red-500 px-4 py-2 text-white transition hover:bg-red-600 disabled:opacity-60"
+                  >
+                    {centralQuestionsEnabled ? "ปิด" : "ยกเลิก"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {open && canManageQuestions && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4">

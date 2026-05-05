@@ -213,7 +213,7 @@ export default function LoginPage() {
                         ลงทะเบียนเพื่อใช้งานระบบ
                       </h3>
                       <p className="mt-1 text-sm leading-5 text-slate-500">
-                        สำหรับบุคคลากรที่ยังไม่ได้เป็นสมาชิกกรุณาลงทะเบียน
+                        สำหรับบุคคลากรที่ยังไม่ได้ลงทะเบียนเข้าใช้งานระบบกรุณาลงทะเบียน
                       </p>
                       <Link
                         href="/register"

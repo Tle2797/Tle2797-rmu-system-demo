@@ -1,6 +1,12 @@
 {
   "files.encoding": "utf8",
   "terminal.integrated.profiles.windows": {
+    "Command Prompt": {
+      "path": [
+        "${env:windir}\\Sysnative\\cmd.exe",
+        "${env:windir}\\System32\\cmd.exe"
+      ]
+    },
     "PowerShell UTF-8 (Workspace)": {
       "source": "PowerShell",
       "args": [
@@ -10,5 +16,5 @@
       ]
     }
   },
-  "terminal.integrated.defaultProfile.windows": "PowerShell UTF-8 (Workspace)"
+  "terminal.integrated.defaultProfile.windows": "Command Prompt"
 }

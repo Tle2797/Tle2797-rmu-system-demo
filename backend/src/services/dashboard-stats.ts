@@ -12,6 +12,7 @@ export async function getDashboardStats() {
     todayRes,
     recentRes,
     topDeptsRes,
+    noDataDepartmentsRes,
     dailyTrendRes,
     bandsRes,
   ] = await Promise.all([
@@ -126,6 +127,25 @@ export async function getDashboardStats() {
     `),
     db.query(`
       WITH active_responses AS (
+        SELECT DISTINCT r.department_id
+        FROM responses r
+        JOIN surveys s ON s.id = r.survey_id
+        WHERE s.is_active = true
+      )
+      SELECT
+        d.id,
+        d.name,
+        0::int AS total_responses,
+        NULL::numeric AS avg_rating,
+        'no_data'::text AS issue_code
+      FROM departments d
+      LEFT JOIN active_responses ar ON ar.department_id = d.id
+      WHERE d.is_active = true
+        AND ar.department_id IS NULL
+      ORDER BY d.name ASC
+    `),
+    db.query(`
+      WITH active_responses AS (
         SELECT
           r.id,
           (timezone('${REPORT_TIMEZONE}', r.submitted_at))::date AS submitted_date_local
@@ -167,6 +187,13 @@ export async function getDashboardStats() {
     },
     recent_responses: recentRes.rows,
     top_departments: topDeptsRes.rows,
+    no_data_departments: noDataDepartmentsRes.rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      total_responses: row.total_responses,
+      avg_rating: row.avg_rating !== null ? Number(row.avg_rating) : null,
+      issue_code: row.issue_code,
+    })),
     daily_trend: dailyTrendRes.rows,
     rating_bands: bandsRes.rows,
   };

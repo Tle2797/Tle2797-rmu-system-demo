@@ -45,6 +45,7 @@ type QuestionRow = {
   answer_count: number;
   response_count: number;
   has_answers: boolean;
+  is_selected?: boolean;
 };
 
 type QuestionsResponse = {
@@ -224,7 +225,9 @@ export default function AdminDepartmentQuestionDetailPage({
         if (!active) return;
 
         const departmentQuestions = (qRes.items ?? []).filter(
-          (question) => question.scope === "department",
+          (question) =>
+            question.scope === "department" ||
+            (question.scope === "central" && question.is_selected),
         );
         setQuestions(departmentQuestions);
       } catch (fetchError: unknown) {
@@ -287,7 +290,7 @@ export default function AdminDepartmentQuestionDetailPage({
 
   const emptyMessage = query.trim()
     ? "ไม่พบคำถามที่ค้นหา"
-    : infoMsg || "หน่วยงานนี้ยังไม่มีคำถามเฉพาะหน่วยงานในแบบสอบถามที่ใช้งานอยู่";
+    : infoMsg || "หน่วยงานนี้ยังไม่มีคำถามที่เลือกใช้ในแบบสอบถามที่ใช้งานอยู่";
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-br from-sky-50 via-white to-blue-50 p-6 text-slate-900">
@@ -375,7 +378,7 @@ export default function AdminDepartmentQuestionDetailPage({
         <section className="overflow-hidden rounded-[28px] border border-white/70 bg-white/90 shadow-[0_18px_45px_rgba(37,99,235,0.08)] backdrop-blur-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
             <div>
-              <h2 className="text-lg font-black text-slate-900">รายการคำถามของหน่วยงานนี้</h2>
+              <h2 className="text-lg font-black text-slate-900">รายการคำถามที่ใช้ในหน่วยงานนี้</h2>
             </div>
             <div className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700">
               {visibleQuestions.length.toLocaleString("th-TH")} รายการ
@@ -450,11 +453,11 @@ export default function AdminDepartmentQuestionDetailPage({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white/95">
-                    {visibleQuestions.map((row) => {
+                    {visibleQuestions.map((row, index) => {
                       return (
                         <tr key={row.id} className="transition hover:bg-slate-50/80">
                           <td className="px-4 py-4 text-center font-medium text-slate-500">
-                            {row.display_order ?? "-"}
+                            {index + 1}
                           </td>
                           <td className="px-4 py-4">
                             <div className="space-y-2">

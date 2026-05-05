@@ -43,6 +43,12 @@ type ApprovalsResponse = {
   items: ApprovalRow[];
 };
 
+type ApprovalActionResponse = {
+  item: ApprovalRow;
+  email_sent?: boolean;
+  email_error?: string | null;
+};
+
 type KpiIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
 const PAGE_SIZE = 10;
@@ -249,14 +255,21 @@ export default function UserApprovalsPage() {
 
     try {
       setBusyId(row.id);
-      await apiPut(`/api/admin/user-approvals/${row.id}/approve`);
+      const res = await apiPut<ApprovalActionResponse>(
+        `/api/admin/user-approvals/${row.id}/approve`,
+      );
       await loadData();
       await Swal.fire({
-        icon: "success",
+        icon: res.email_sent === false ? "warning" : "success",
         title: "อนุมัติเรียบร้อย",
-        text: "ผู้ใช้สามารถเข้าสู่ระบบได้แล้ว",
-        timer: 1400,
-        showConfirmButton: false,
+        text:
+          res.email_sent === false
+            ? "ผู้ใช้สามารถเข้าสู่ระบบได้แล้ว แต่ระบบส่งอีเมลแจ้งผู้ใช้ไม่สำเร็จ"
+            : "ผู้ใช้สามารถเข้าสู่ระบบได้แล้ว และระบบส่งอีเมลแจ้งผู้ใช้เรียบร้อยแล้ว",
+        timer: res.email_sent === false ? undefined : 1600,
+        showConfirmButton: res.email_sent === false,
+        confirmButtonText: "ตกลง",
+        confirmButtonColor: "#0369a1",
       });
     } catch (error: unknown) {
       await Swal.fire({
@@ -403,7 +416,7 @@ export default function UserApprovalsPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="min-w-[240px] flex-1">
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                ค้นหา
+                ค้นหา (ชื่อผู้ใช้ / อีเมล / ตำแหน่ง / หน่วยงาน)
               </label>
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
@@ -412,7 +425,7 @@ export default function UserApprovalsPage() {
                 <input
                   value={q}
                   onChange={(event) => setQ(event.target.value)}
-                  placeholder="ชื่อ / ชื่อผู้ใช้ / อีเมล / หน่วยงาน"
+                  placeholder=""
                   className={`${inputClass} pl-9`}
                 />
               </div>

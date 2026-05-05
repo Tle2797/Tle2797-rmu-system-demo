@@ -4,6 +4,7 @@ import {
   ProfileImageUploadError,
   saveProfileImage,
 } from "../services/profile-image";
+import { sendUserApprovalEmail } from "../services/mail";
 import { authenticateRequest } from "../utils/auth";
 
 export async function listUsers() {
@@ -266,6 +267,18 @@ function buildApprovalCounts(rows: Array<{ approval_status: ApprovalStatus; tota
   return counts;
 }
 
+function formatUserFullName(user: {
+  title?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  username?: string | null;
+}) {
+  const firstPart = `${user.title ?? ""}${user.first_name ?? ""}`.trim();
+  const lastPart = (user.last_name ?? "").trim();
+  const fullName = [firstPart, lastPart].filter(Boolean).join(" ").trim();
+  return fullName || user.username || "ผู้ใช้งาน";
+}
+
 export async function listUserApprovals({ query }: any) {
   const requestedStatus = String(query?.status || "pending");
   const status =
@@ -377,7 +390,32 @@ export async function approveUserRegistration({ params, request, set }: any) {
     [id, currentUser.id],
   );
 
-  return { item: up.rows[0] };
+  const approvedUser = up.rows[0];
+  let emailSent = false;
+  let emailError: string | null = null;
+
+  if (approvedUser.email) {
+    try {
+      await sendUserApprovalEmail({
+        email: approvedUser.email,
+        fullName: formatUserFullName(approvedUser),
+      });
+      emailSent = true;
+    } catch (error) {
+      emailError = error instanceof Error ? error.message : "Unable to send approval email";
+      console.error("Failed to send user approval email", {
+        user_id: approvedUser.id,
+        email: approvedUser.email,
+        error,
+      });
+    }
+  }
+
+  return {
+    item: approvedUser,
+    email_sent: emailSent,
+    email_error: emailError,
+  };
 }
 
 export async function rejectUserRegistration({ params, body, request, set }: any) {

@@ -100,3 +100,45 @@ export async function ensureUserApprovalColumns() {
         ON users (registration_source)
     `);
 }
+
+export async function ensureDepartmentCentralQuestionTable() {
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS department_central_questions (
+            department_id bigint NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+            question_id bigint NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+            created_at timestamp with time zone NOT NULL DEFAULT now(),
+            PRIMARY KEY (department_id, question_id)
+        )
+    `);
+
+    await db.query(`
+        CREATE INDEX IF NOT EXISTS idx_department_central_questions_question
+        ON department_central_questions (question_id)
+    `);
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS department_central_question_settings (
+            department_id bigint NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+            survey_id bigint NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            enabled boolean NOT NULL DEFAULT false,
+            created_at timestamp with time zone NOT NULL DEFAULT now(),
+            updated_at timestamp with time zone NOT NULL DEFAULT now(),
+            PRIMARY KEY (department_id, survey_id)
+        )
+    `);
+
+    await db.query(`
+        CREATE INDEX IF NOT EXISTS idx_department_central_question_settings_survey
+        ON department_central_question_settings (survey_id)
+    `);
+
+    await db.query(`
+        INSERT INTO department_central_question_settings (department_id, survey_id, enabled)
+        SELECT DISTINCT dcq.department_id, q.survey_id, true
+        FROM department_central_questions dcq
+        JOIN questions q ON q.id = dcq.question_id
+        WHERE q.scope = 'central'
+        ON CONFLICT (department_id, survey_id)
+        DO UPDATE SET enabled = true, updated_at = now()
+    `);
+}

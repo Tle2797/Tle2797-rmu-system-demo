@@ -47,6 +47,10 @@ type QuestionDeleteResponse = {
   response_count?: number;
   has_answers?: boolean;
   requires_confirmation?: boolean;
+  deleted_answers?: number;
+  affected_responses?: number;
+  deleted_responses?: number;
+  recalculated?: boolean;
 };
 
 type ModalMode = "create" | "edit";
@@ -509,17 +513,13 @@ export default function AdminCentralQuestionsPage() {
       const hasRecordedAnswers = row.has_answers || row.answer_count > 0;
 
       const result = await Swal.fire({
-        icon: hasRecordedAnswers ? "warning" : "question",
-        title: hasRecordedAnswers ? "คำถามนี้มีการประเมินแล้ว" : "ลบคำถาม",
+        icon: "question",
+        title: "ลบคำถาม",
         text: hasRecordedAnswers
-          ? `${getQuestionUsageText(
-              row.answer_count,
-              row.response_count,
-              row.type,
-            )}\n\nต้องการลบคำถาม "${row.text}" ใช่ไหม?`
+          ? `ต้องการลบคำถาม "${row.text}" ใช่ไหม?\nระบบจะตรวจสอบข้อมูลคำตอบก่อนลบ`
           : `ต้องการลบคำถาม "${row.text}" ใช่ไหม?\nการกระทำนี้ไม่สามารถย้อนกลับได้`,
         showCancelButton: true,
-        confirmButtonText: hasRecordedAnswers ? "ยืนยันการลบข้อมูล" : "ลบ",
+        confirmButtonText: "ลบ",
         cancelButtonText: "ยกเลิก",
         focusCancel: true,
         confirmButtonColor: "#dc2626",
@@ -535,10 +535,8 @@ export default function AdminCentralQuestionsPage() {
       if (!result.isConfirmed) return;
 
       setBusy(true);
-      let recalculated = hasRecordedAnswers;
-      let response = await apiDeleteWithMeta<QuestionDeleteResponse>(
-        hasRecordedAnswers ? `${deletePath}?force=true` : deletePath,
-      );
+      let recalculated = false;
+      let response = await apiDeleteWithMeta<QuestionDeleteResponse>(deletePath);
 
       if (!response.ok) {
         if (
@@ -582,6 +580,13 @@ export default function AdminCentralQuestionsPage() {
         if (!response.ok) {
           throw new Error(response.error ?? "ลบข้อมูลไม่สำเร็จ");
         }
+      }
+
+      if (isQuestionDeleteResponse(response.data)) {
+        recalculated =
+          recalculated ||
+          Boolean(response.data.recalculated) ||
+          Boolean((response.data.deleted_answers ?? 0) > 0);
       }
 
       await load();

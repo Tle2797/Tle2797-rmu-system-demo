@@ -144,7 +144,16 @@ export async function submitSurveyResponse(payload: Record<string, unknown>) {
     WHERE q.survey_id = $1
       AND q.status = 'active'
       AND (
-        q.scope = 'central'
+        (
+          q.scope = 'central'
+          AND EXISTS (
+            SELECT 1
+            FROM department_central_question_settings dcqs
+            WHERE dcqs.department_id = $2
+              AND dcqs.survey_id = $1
+              AND dcqs.enabled = true
+          )
+        )
         OR (q.scope = 'department' AND q.department_id = $2)
       )
     `,
